@@ -1,0 +1,6 @@
+{
+  "name": "SinalCripto IA",
+  "description": "Plataforma autônoma de inteligência artificial que estuda o mercado de criptomoedas e envia sugestões automáticas de compra, venda ou espera.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

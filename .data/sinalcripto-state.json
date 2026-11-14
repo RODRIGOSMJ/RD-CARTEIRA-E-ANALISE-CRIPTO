@@ -1,0 +1,15 @@
+{
+  "watchlist": [],
+  "analyses": {},
+  "alerts": [],
+  "studyHistory": [],
+  "settings": {
+    "autoStudyEnabled": true,
+    "intervalMinutes": 5,
+    "currency": "BRL",
+    "minConfidenceForAlert": 65,
+    "webhookUrl": ""
+  },
+  "portfolioName": "MINHA CARTEIRA",
+  "transactions": []
+}

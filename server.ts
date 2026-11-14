@@ -1,0 +1,650 @@
+import 'dotenv/config';
+import express from 'express';
+import path from 'node:path';
+import { createServer as createViteServer } from 'vite';
+import type { AppStatePayload, WatchlistAsset } from './src/types/crypto.ts';
+import {
+  dispatchWebhookNotification,
+  runAutonomousStudyCycle,
+} from './server/aiEngine.ts';
+import {
+  fetchMarketSnapshots,
+  fetchSingleCoinPriceUsd,
+  getAssetChartSeries,
+  getPortfolioHistorySeries,
+  getUsdBrlRate,
+  searchCryptos,
+} from './server/marketData.ts';
+import {
+  computePortfolioSummary,
+  evaluatePastAlerts,
+  getAccuracyStats,
+  getStore,
+  loadStore,
+  saveStore,
+} from './server/store.ts';
+
+const PORT = 3000;
+
+async function startServer() {
+  loadStore();
+
+  const app = express();
+  app.use(express.json());
+
+  // SSE connected clients
+  const sseClients = new Set<express.Response>();
+  let isStudying = false;
+  let nextStudyAt: string | null = null;
+  let studyTimer: ReturnType<typeof setInterval> | null = null;
+  let marketTimer: ReturnType<typeof setInterval> | null = null;
+
+  function broadcastSSE(event: string, data: unknown) {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of sseClients) {
+      try {
+        res.write(payload);
+      } catch {
+        sseClients.delete(res);
+      }
+    }
+  }
+
+  async function buildStatePayload(forceMarketRefresh = false): Promise<AppStatePayload> {
+    const store = getStore();
+    const [snapshots, usdBrlRate] = await Promise.all([
+      fetchMarketSnapshots(store.watchlist, forceMarketRefresh),
+      getUsdBrlRate(),
+    ]);
+    evaluatePastAlerts(snapshots);
+
+    return {
+      watchlist: store.watchlist,
+      snapshots,
+      analyses: store.analyses,
+      alerts: store.alerts,
+      studyHistory: store.studyHistory,
+      settings: store.settings,
+      portfolio: computePortfolioSummary(snapshots),
+      usdBrlRate,
+      isStudying,
+      nextStudyAt,
+      accuracyStats: getAccuracyStats(),
+    };
+  }
+
+  async function executeStudy(
+    assets?: WatchlistAsset[],
+    trigger: 'automatico' | 'manual' | 'novo_ativo' = 'automatico'
+  ) {
+    if (isStudying) {
+      throw new Error('Um ciclo de estudo autônomo já está em andamento.');
+    }
+    const store = getStore();
+    const targetAssets = assets && assets.length > 0 ? assets : store.watchlist;
+    if (targetAssets.length === 0) {
+      throw new Error('Nenhum ativo cadastrado para estudar.');
+    }
+    isStudying = true;
+    broadcastSSE('study_status', { isStudying: true, trigger });
+
+    try {
+      const snapshots = await fetchMarketSnapshots(store.watchlist, true);
+      const result = await runAutonomousStudyCycle(
+        targetAssets,
+        snapshots,
+        trigger,
+        (prog) => broadcastSSE('study_progress', prog)
+      );
+
+      scheduleNextStudyTimer();
+      const fullState = await buildStatePayload(false);
+      broadcastSSE('study_completed', {
+        cycle: result.cycle,
+        newAlerts: result.newAlerts,
+        state: fullState,
+      });
+
+      return result;
+    } finally {
+      isStudying = false;
+      broadcastSSE('study_status', { isStudying: false });
+    }
+  }
+
+  function scheduleNextStudyTimer() {
+    if (studyTimer) {
+      clearInterval(studyTimer);
+      studyTimer = null;
+    }
+    const store = getStore();
+    if (!store.settings.autoStudyEnabled) {
+      nextStudyAt = null;
+      return;
+    }
+
+    const intervalMs = Math.max(1, store.settings.intervalMinutes) * 60_000;
+    nextStudyAt = new Date(Date.now() + intervalMs).toISOString();
+
+    studyTimer = setInterval(async () => {
+      const currentStore = getStore();
+      if (
+        isStudying ||
+        !currentStore.settings.autoStudyEnabled ||
+        currentStore.watchlist.length === 0
+      ) {
+        return;
+      }
+      try {
+        await executeStudy(undefined, 'automatico');
+      } catch (err) {
+        console.error('Erro no ciclo automático de estudo:', err);
+      }
+    }, intervalMs);
+  }
+
+  // Periodic live price refresh every 20 seconds pushed via SSE
+  marketTimer = setInterval(async () => {
+    if (sseClients.size === 0) return;
+    try {
+      const store = getStore();
+      const [snapshots, usdBrlRate] = await Promise.all([
+        fetchMarketSnapshots(store.watchlist, true),
+        getUsdBrlRate(),
+      ]);
+      evaluatePastAlerts(snapshots);
+      broadcastSSE('market_tick', {
+        snapshots,
+        usdBrlRate,
+        accuracyStats: getAccuracyStats(),
+        alerts: store.alerts,
+        portfolio: computePortfolioSummary(snapshots),
+      });
+    } catch {
+      // silent retry on next tick
+    }
+  }, 20_000);
+
+  // API Routes
+  app.get('/api/state', async (_req, res) => {
+    try {
+      const payload = await buildStatePayload(false);
+      res.json(payload);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao carregar estado do mercado.' });
+    }
+  });
+
+  app.get('/api/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    sseClients.add(res);
+    res.write(`event: connected\ndata: ${JSON.stringify({ ok: true, isStudying, nextStudyAt })}\n\n`);
+
+    const keepAlive = setInterval(() => {
+      res.write(': ping\n\n');
+    }, 25_000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+    });
+  });
+
+  app.get('/api/chart/:coinId', async (req, res) => {
+    try {
+      const { coinId } = req.params;
+      const rangeParam = req.query.range;
+      const range: '24h' | '7d' | '30d' =
+        rangeParam === '24h' || rangeParam === '30d' ? rangeParam : '7d';
+
+      const asset = getStore().watchlist.find((a) => a.id === coinId);
+      if (!asset) {
+        return res.status(404).json({ error: 'Criptoativo não encontrado na lista.' });
+      }
+
+      const points = await getAssetChartSeries(asset, range);
+      res.json({ coinId, range, points });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao carregar gráfico.' });
+    }
+  });
+
+  app.get('/api/search', async (req, res) => {
+    try {
+      const q = String(req.query.q ?? '');
+      const results = await searchCryptos(q);
+      res.json({ results });
+    } catch {
+      res.json({ results: [] });
+    }
+  });
+
+  app.get('/api/price', async (req, res) => {
+    try {
+      const coinId = String(req.query.coinId ?? '').trim();
+      const symbol = String(req.query.symbol ?? '').trim();
+      if (!coinId || !symbol) {
+        return res.status(400).json({ error: 'coinId e symbol são obrigatórios.' });
+      }
+      const priceUsd = await fetchSingleCoinPriceUsd(coinId, symbol);
+      res.json({ priceUsd });
+    } catch {
+      res.json({ priceUsd: null });
+    }
+  });
+
+  app.post('/api/watchlist', async (req, res) => {
+    try {
+      const { id, symbol, name } = req.body as {
+        id?: string;
+        symbol?: string;
+        name?: string;
+      };
+      if (!id || !symbol || !name) {
+        return res.status(400).json({ error: 'Campos id, symbol e name são obrigatórios.' });
+      }
+
+      const store = getStore();
+      const exists = store.watchlist.find((a) => a.id === id);
+      if (exists) {
+        return res.status(409).json({ error: `${symbol} já está na lista de monitoramento.` });
+      }
+
+      const newAsset: WatchlistAsset = {
+        id,
+        symbol: symbol.toUpperCase(),
+        name,
+        binanceSymbol: `${symbol.toUpperCase()}USDT`,
+        addedAt: new Date().toISOString(),
+      };
+
+      store.watchlist.push(newAsset);
+      saveStore();
+
+      const snapshots = await fetchMarketSnapshots(store.watchlist, true);
+      const fullState = await buildStatePayload(false);
+      res.json({ asset: newAsset, state: fullState, snapshots });
+
+      if (!isStudying && process.env.GEMINI_API_KEY) {
+        void executeStudy([newAsset], 'novo_ativo').catch((aiErr) => {
+          console.warn('Estudo imediato do novo ativo falhou:', aiErr);
+        });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao adicionar criptoativo.' });
+    }
+  });
+
+  app.delete('/api/watchlist/:coinId', async (req, res) => {
+    try {
+      const { coinId } = req.params;
+      const store = getStore();
+      store.watchlist = store.watchlist.filter((a) => a.id !== coinId);
+      delete store.analyses[coinId];
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao remover ativo.' });
+    }
+  });
+
+  app.post('/api/study/run', async (req, res) => {
+    try {
+      const coinId = req.body?.coinId as string | undefined;
+      const store = getStore();
+      const assets = coinId
+        ? store.watchlist.filter((a) => a.id === coinId)
+        : store.watchlist;
+
+      if (assets.length === 0) {
+        return res.status(404).json({ error: 'Nenhum ativo encontrado para estudar.' });
+      }
+
+      const result = await executeStudy(assets, 'manual');
+      const fullState = await buildStatePayload(false);
+      res.json({
+        cycle: result.cycle,
+        newAlerts: result.newAlerts,
+        state: fullState,
+      });
+    } catch (err: any) {
+      const message = err?.message || 'Falha ao executar estudo de IA.';
+      const status = message.includes('andamento') ? 409 : 500;
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.patch('/api/settings', async (req, res) => {
+    try {
+      const store = getStore();
+      const patch = req.body as Partial<typeof store.settings>;
+      store.settings = {
+        ...store.settings,
+        ...(typeof patch.autoStudyEnabled === 'boolean'
+          ? { autoStudyEnabled: patch.autoStudyEnabled }
+          : {}),
+        ...(typeof patch.intervalMinutes === 'number'
+          ? { intervalMinutes: Math.max(1, Math.min(120, patch.intervalMinutes)) }
+          : {}),
+        ...(patch.currency === 'USD' || patch.currency === 'BRL'
+          ? { currency: patch.currency }
+          : {}),
+        ...(typeof patch.minConfidenceForAlert === 'number'
+          ? { minConfidenceForAlert: Math.max(40, Math.min(95, patch.minConfidenceForAlert)) }
+          : {}),
+        ...(typeof patch.webhookUrl === 'string'
+          ? { webhookUrl: patch.webhookUrl.trim() }
+          : {}),
+      };
+      saveStore();
+      scheduleNextStudyTimer();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao atualizar configurações.' });
+    }
+  });
+
+  app.post('/api/settings/test-webhook', async (req, res) => {
+    try {
+      const webhookUrl = String(req.body?.webhookUrl || getStore().settings.webhookUrl || '').trim();
+      if (!webhookUrl) {
+        return res.status(400).json({ error: 'Informe uma URL de webhook válida.' });
+      }
+      const ok = await dispatchWebhookNotification(webhookUrl, [
+        {
+          id: 'test_webhook',
+          coinId: 'bitcoin',
+          symbol: 'BTC',
+          name: 'Bitcoin',
+          action: 'COMPRAR',
+          confidence: 82,
+          priceAtSignalUsd: 90000,
+          targetPriceUsd: 95000,
+          stopLossUsd: 87000,
+          headline: 'Teste de integração de alertas automáticos do SinalCripto IA',
+          reason: 'Mensagem de verificação enviada pelo painel de configurações.',
+          createdAt: new Date().toISOString(),
+          read: true,
+          outcome: 'em_aberto',
+        },
+      ]);
+      if (!ok) {
+        return res.status(502).json({ error: 'O servidor de destino rejeitou ou não respondeu ao webhook.' });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao testar webhook.' });
+    }
+  });
+
+  app.post('/api/alerts/mark-read', (_req, res) => {
+    const store = getStore();
+    for (const alert of store.alerts) {
+      alert.read = true;
+    }
+    saveStore();
+    res.json({ ok: true, alerts: store.alerts });
+  });
+
+  // Portfolio endpoints
+  app.get('/api/portfolio/history', async (req, res) => {
+    try {
+      const rangeParam = String(req.query.range || '7d');
+      const range: '24h' | '7d' | '30d' | '90d' | 'all' =
+        rangeParam === '24h' ||
+        rangeParam === '30d' ||
+        rangeParam === '90d' ||
+        rangeParam === 'all'
+          ? rangeParam
+          : '7d';
+
+      const store = getStore();
+      const snapshots = await fetchMarketSnapshots(store.watchlist, false);
+      const portfolio = computePortfolioSummary(snapshots);
+      const activeHoldings = portfolio.holdings.filter((h) => h.quantity > 0);
+      const points = await getPortfolioHistorySeries(
+        activeHoldings,
+        portfolio.totalCostBasisUsd,
+        range
+      );
+
+      res.json({ range, points });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao calcular histórico da carteira.' });
+    }
+  });
+
+  app.patch('/api/portfolio/meta', async (req, res) => {
+    try {
+      const name = String(req.body?.name ?? '').trim();
+      if (!name) {
+        return res.status(400).json({ error: 'Informe um nome válido para a carteira.' });
+      }
+      const store = getStore();
+      store.portfolioName = name.slice(0, 40);
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao renomear carteira.' });
+    }
+  });
+
+  app.post('/api/portfolio/transactions', async (req, res) => {
+    try {
+      const { coinId, symbol, name, type, quantity, pricePerCoinUsd, feeUsd, timestamp, note } =
+        req.body as {
+          coinId?: string;
+          symbol?: string;
+          name?: string;
+          type?: 'compra' | 'venda' | 'ganho';
+          quantity?: number;
+          pricePerCoinUsd?: number;
+          feeUsd?: number;
+          timestamp?: string;
+          note?: string;
+        };
+
+      if (!coinId || !symbol || !name) {
+        return res.status(400).json({ error: 'Selecione um criptoativo válido.' });
+      }
+      if (type !== 'compra' && type !== 'venda' && type !== 'ganho') {
+        return res.status(400).json({ error: 'Tipo deve ser compra, venda ou ganho.' });
+      }
+      const qty = Number(quantity);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ error: 'Informe uma quantidade maior que zero.' });
+      }
+
+      const unitPrice = type === 'ganho' ? Math.max(0, Number(pricePerCoinUsd) || 0) : Number(pricePerCoinUsd);
+      if (type !== 'ganho' && (!Number.isFinite(unitPrice) || unitPrice <= 0)) {
+        return res.status(400).json({ error: 'Informe um preço unitário válido.' });
+      }
+
+      const store = getStore();
+      const upperSym = symbol.toUpperCase();
+
+      // Auto-sync asset into AI watchlist so the robot monitors and computes signals for it
+      const existingAsset = store.watchlist.find((a) => a.id === coinId);
+      let addedNewAsset: WatchlistAsset | null = null;
+      if (!existingAsset) {
+        addedNewAsset = {
+          id: coinId,
+          symbol: upperSym,
+          name,
+          binanceSymbol: `${upperSym}USDT`,
+          addedAt: new Date().toISOString(),
+        };
+        store.watchlist.push(addedNewAsset);
+      }
+
+      const tx = {
+        id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        coinId,
+        symbol: upperSym,
+        name,
+        type,
+        quantity: qty,
+        pricePerCoinUsd: Number.isFinite(unitPrice) ? unitPrice : 0,
+        feeUsd: Math.max(0, Number(feeUsd) || 0),
+        timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
+        note: note ? String(note).slice(0, 140) : undefined,
+      };
+
+      store.transactions.push(tx);
+      saveStore();
+
+      // Fetch snapshot immediately for the added asset and return saved state right away
+      await fetchMarketSnapshots(store.watchlist, true);
+      const fullState = await buildStatePayload(false);
+      res.json({ transaction: tx, state: fullState });
+
+      // Run AI study on new asset in background and broadcast via SSE
+      if (addedNewAsset && !isStudying && process.env.GEMINI_API_KEY) {
+        void executeStudy([addedNewAsset], 'novo_ativo').catch((aiErr) => {
+          console.warn('Estudo imediato do ativo da carteira falhou:', aiErr);
+        });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao registrar transação.' });
+    }
+  });
+
+  app.delete('/api/portfolio/transactions/:txId', async (req, res) => {
+    try {
+      const { txId } = req.params;
+      const store = getStore();
+      const before = store.transactions.length;
+      store.transactions = store.transactions.filter((t) => t.id !== txId);
+      if (store.transactions.length === before) {
+        return res.status(404).json({ error: 'Transação não encontrada.' });
+      }
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao remover transação.' });
+    }
+  });
+
+  app.delete('/api/portfolio/transactions', async (_req, res) => {
+    try {
+      const store = getStore();
+      store.transactions = [];
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao limpar histórico de transações.' });
+    }
+  });
+
+  app.delete('/api/portfolio/assets/:coinId', async (req, res) => {
+    try {
+      const { coinId } = req.params;
+      const store = getStore();
+      store.transactions = store.transactions.filter((t) => t.coinId !== coinId);
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao excluir histórico do ativo na carteira.' });
+    }
+  });
+
+  app.delete('/api/alerts/:alertId', async (req, res) => {
+    try {
+      const { alertId } = req.params;
+      const store = getStore();
+      store.alerts = store.alerts.filter((a) => a.id !== alertId);
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao excluir alerta.' });
+    }
+  });
+
+  app.delete('/api/alerts', async (_req, res) => {
+    try {
+      const store = getStore();
+      store.alerts = [];
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao limpar alertas.' });
+    }
+  });
+
+  app.delete('/api/study-history/:cycleId', async (req, res) => {
+    try {
+      const { cycleId } = req.params;
+      const store = getStore();
+      store.studyHistory = store.studyHistory.filter((c) => c.id !== cycleId);
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao excluir registro de estudo.' });
+    }
+  });
+
+  app.delete('/api/study-history', async (_req, res) => {
+    try {
+      const store = getStore();
+      store.studyHistory = [];
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao limpar histórico de estudos.' });
+    }
+  });
+
+  // Vite dev middleware or production static build
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.resolve(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`SinalCripto IA rodando em http://0.0.0.0:${PORT}`);
+    scheduleNextStudyTimer();
+
+    const store = getStore();
+    const hasAnalyses = Object.keys(store.analyses).length >= store.watchlist.length;
+    if (store.watchlist.length > 0 && !hasAnalyses && process.env.GEMINI_API_KEY) {
+      setTimeout(() => {
+        if (!isStudying && getStore().watchlist.length > 0) {
+          executeStudy(undefined, 'automatico').catch((err) => {
+            console.warn('Estudo inicial automático falhou:', err?.message ?? err);
+          });
+        }
+      }, 1500);
+    }
+  });
+
+  process.on('SIGTERM', () => {
+    if (studyTimer) clearInterval(studyTimer);
+    if (marketTimer) clearInterval(marketTimer);
+    process.exit(0);
+  });
+}
+
+startServer();
