@@ -10,6 +10,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { apiGetPortfolioHistory } from '../services/apiClient.ts';
 import type {
   AIAnalysisResult,
   MarketSnapshot,
@@ -80,9 +81,8 @@ export function PortfolioView({
 
     let active = true;
     setHistoryLoading(true);
-    fetch(`/api/portfolio/history?range=${chartRange}`)
-      .then((r) => r.json())
-      .then((data: { points?: PortfolioHistoryPoint[] }) => {
+    apiGetPortfolioHistory(chartRange)
+      .then((data) => {
         if (!active) return;
         setHistoryPoints(data.points ?? []);
         setHistoryLoading(false);

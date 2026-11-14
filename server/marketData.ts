@@ -17,8 +17,8 @@ const seriesCache = new Map<string, CachedSeries>();
 const snapshotCache = new Map<string, { data: MarketSnapshot; fetchedAt: number }>();
 let cachedUsdBrl = { rate: 5.75, fetchedAt: 0 };
 
-const SNAPSHOT_TTL_MS = 20_000;
-const SERIES_TTL_MS = 90_000;
+const SNAPSHOT_TTL_MS = 10_000;
+const SERIES_TTL_MS = 60_000;
 
 export async function getUsdBrlRate(): Promise<number> {
   if (Date.now() - cachedUsdBrl.fetchedAt < 10 * 60_000) {
@@ -32,6 +32,22 @@ export async function getUsdBrlRate(): Promise<number> {
     if (res.ok) {
       const json = (await res.json()) as { USDBRL?: { bid?: string } };
       const parsed = Number(json?.USDBRL?.bid);
+      if (Number.isFinite(parsed) && parsed > 1) {
+        cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
+        return parsed;
+      }
+    }
+  } catch {
+    // Fallback to CoinGecko tether/brl
+  }
+
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { rates?: { BRL?: number } };
+      const parsed = Number(json?.rates?.BRL);
       if (Number.isFinite(parsed) && parsed > 1) {
         cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
         return parsed;
@@ -63,24 +79,44 @@ export async function getUsdBrlRate(): Promise<number> {
 
 async function fetchBinance24hr(symbols: string[]): Promise<Map<string, any>> {
   const map = new Map<string, any>();
-  const valid = symbols.filter(Boolean);
+  const valid = Array.from(new Set(symbols.filter(Boolean)));
   if (valid.length === 0) return map;
 
   try {
     const url = `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${encodeURIComponent(
       JSON.stringify(valid)
     )}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) return map;
-    const data = (await res.json()) as any[];
-    if (Array.isArray(data)) {
-      for (const item of data) {
-        if (item?.symbol) map.set(item.symbol, item);
+    const res = await fetch(url, { signal: AbortSignal.timeout(5500) });
+    if (res.ok) {
+      const data = (await res.json()) as any[];
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (item?.symbol) map.set(item.symbol, item);
+        }
+        return map;
       }
     }
   } catch {
-    // ignore and allow fallback
+    // fallback to individual requests below
   }
+
+  // If one symbol is invalid on Binance Spot (causing batch 400), query individually
+  await Promise.all(
+    valid.map(async (sym) => {
+      try {
+        const res = await fetch(
+          `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${encodeURIComponent(sym)}`,
+          { signal: AbortSignal.timeout(4500) }
+        );
+        if (!res.ok) return;
+        const item = (await res.json()) as any;
+        if (item?.symbol) map.set(item.symbol, item);
+      } catch {
+        // ignore missing symbol
+      }
+    })
+  );
+
   return map;
 }
 

@@ -19,6 +19,24 @@ import { AutomationSettingsPanel } from './components/AutomationSettingsPanel.ts
 import { PortfolioView } from './components/PortfolioView.tsx';
 import { SignalBadge } from './components/SignalBadge.tsx';
 import { Sparkline } from './components/Sparkline.tsx';
+import {
+  apiAddTransaction,
+  apiAddWatchlist,
+  apiClearAlerts,
+  apiClearStudyHistory,
+  apiClearTransactions,
+  apiDeleteAlert,
+  apiDeletePortfolioAsset,
+  apiDeleteStudyCycle,
+  apiDeleteTransaction,
+  apiGetState,
+  apiMarkAlertsRead,
+  apiRemoveWatchlist,
+  apiRenamePortfolio,
+  apiRunStudy,
+  apiUpdateSettings,
+  getBackendMode,
+} from './services/apiClient.ts';
 import type {
   AppSettings,
   AppStatePayload,
@@ -57,6 +75,7 @@ export default function App() {
   const settingsRef = useRef<AppSettings | null>(null);
   const usdBrlRef = useRef<number>(5.75);
   const soundEnabledRef = useRef<boolean>(soundEnabled);
+  const lastMarketTickAtRef = useRef<number>(0);
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -71,11 +90,13 @@ export default function App() {
 
   const fetchInitialState = useCallback(async () => {
     try {
-      const res = await fetch('/api/state');
-      const data = (await res.json()) as AppStatePayload & { error?: string };
-      if (!res.ok) throw new Error(data.error || 'Erro ao carregar dados');
+      const data = await apiGetState(true);
+      lastMarketTickAtRef.current = Date.now();
       setState(data);
       setError(null);
+      if (getBackendMode() === 'local') {
+        setStreamConnected(true);
+      }
       setSelectedCoinId((prev) => {
         if (data.watchlist.length === 0) return '';
         return !data.watchlist.some((w) => w.id === prev)
@@ -83,7 +104,7 @@ export default function App() {
           : prev;
       });
     } catch (err: any) {
-      setError(err?.message || 'Não foi possível conectar ao servidor.');
+      setError(err?.message || 'Não foi possível conectar ao mercado.');
     } finally {
       setLoading(false);
     }
@@ -93,8 +114,14 @@ export default function App() {
     fetchInitialState();
   }, [fetchInitialState]);
 
-  // Real-time SSE connection
+  // Real-time SSE connection when backend server is active
   useEffect(() => {
+    if (loading) return;
+    if (getBackendMode() === 'local') {
+      setStreamConnected(true);
+      return;
+    }
+
     const es = new EventSource('/api/stream');
 
     es.addEventListener('connected', () => {
@@ -110,6 +137,8 @@ export default function App() {
           alerts: AppStatePayload['alerts'];
           portfolio: AppStatePayload['portfolio'];
         };
+        lastMarketTickAtRef.current = Date.now();
+        setStreamConnected(true);
         setState((prev) =>
           prev
             ? {
@@ -158,6 +187,7 @@ export default function App() {
           newAlerts: SignalAlert[];
           state: AppStatePayload;
         };
+        lastMarketTickAtRef.current = Date.now();
         setState(data.state);
         setStudyStatusMsg(null);
 
@@ -185,16 +215,57 @@ export default function App() {
     });
 
     es.onerror = () => {
-      setStreamConnected(false);
+      if (getBackendMode() === 'local') {
+        es.close();
+        setStreamConnected(true);
+      } else {
+        setStreamConnected(false);
+      }
     };
 
     return () => {
       es.close();
     };
-  }, []);
+  }, [loading]);
+
+  // Guaranteed 10-second live price refresh for watchlist + portfolio (server backup + static mode)
+  useEffect(() => {
+    if (loading) return;
+    const timer = setInterval(async () => {
+      const elapsed = Date.now() - lastMarketTickAtRef.current;
+      // If SSE just delivered a fresh tick (< 9s), skip redundant poll
+      if (getBackendMode() === 'server' && elapsed < 9_000) {
+        return;
+      }
+      try {
+        const fresh = await apiGetState(true);
+        lastMarketTickAtRef.current = Date.now();
+        setStreamConnected(true);
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                snapshots: fresh.snapshots,
+                usdBrlRate: fresh.usdBrlRate,
+                accuracyStats: fresh.accuracyStats,
+                alerts: fresh.alerts,
+                portfolio: fresh.portfolio,
+                analyses: fresh.analyses,
+                studyHistory: fresh.studyHistory,
+              }
+            : fresh
+        );
+      } catch {
+        // silent retry on next 10s cycle
+      }
+    }, 10_000);
+
+    return () => clearInterval(timer);
+  }, [loading]);
 
   // Countdown timer for next automatic AI study
   useEffect(() => {
+    let triggeredLocalCycle = false;
     const updateCountdown = () => {
       if (!state?.settings.autoStudyEnabled || !state.nextStudyAt) {
         setCountdownLabel(state?.settings.autoStudyEnabled ? 'Agendando...' : 'Pausado');
@@ -209,28 +280,38 @@ export default function App() {
       setCountdownLabel(
         `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
       );
+
+      if (
+        diffSec === 0 &&
+        !triggeredLocalCycle &&
+        getBackendMode() === 'local' &&
+        state.watchlist.length > 0 &&
+        !state.isStudying
+      ) {
+        triggeredLocalCycle = true;
+        void apiRunStudy()
+          .then((res) => {
+            setState(res.state);
+            if (res.newAlerts && res.newAlerts.length > 0) {
+              setLiveBannerAlerts(res.newAlerts.slice(0, 3));
+            }
+          })
+          .catch(() => {
+            // retry on next schedule
+          });
+      }
     };
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [state?.nextStudyAt, state?.settings.autoStudyEnabled]);
+  }, [state?.nextStudyAt, state?.settings.autoStudyEnabled, state?.watchlist.length, state?.isStudying]);
 
   async function handleRunStudy(coinId?: string) {
     setError(null);
     setState((prev) => (prev ? { ...prev, isStudying: true } : prev));
     try {
-      const res = await fetch('/api/study/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(coinId ? { coinId } : {}),
-      });
-      const json = (await res.json()) as {
-        state?: AppStatePayload;
-        newAlerts?: SignalAlert[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error || 'Erro ao executar estudo');
-      if (json.state) setState(json.state);
+      const json = await apiRunStudy(coinId);
+      setState(json.state);
       if (json.newAlerts && json.newAlerts.length > 0) {
         setLiveBannerAlerts(json.newAlerts.slice(0, 3));
       }
@@ -241,55 +322,33 @@ export default function App() {
   }
 
   async function handleAddAsset(coin: { id: string; symbol: string; name: string }) {
-    const res = await fetch('/api/watchlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(coin),
-    });
-    const json = (await res.json()) as {
-      state?: AppStatePayload;
-      error?: string;
-    };
-    if (!res.ok) throw new Error(json.error || 'Falha ao adicionar ativo');
-    if (json.state) {
-      setState(json.state);
-      setSelectedCoinId(coin.id);
-    }
+    const updatedState = await apiAddWatchlist(coin);
+    setState(updatedState);
+    setSelectedCoinId(coin.id);
   }
 
   async function handleRemoveAsset(coinId: string) {
-    const res = await fetch(`/api/watchlist/${encodeURIComponent(coinId)}`, {
-      method: 'DELETE',
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Não foi possível remover o ativo.');
-      return;
-    }
-    if (json.state) {
-      setState(json.state);
-      if (json.state.watchlist.length === 0) {
+    try {
+      const updatedState = await apiRemoveWatchlist(coinId);
+      setState(updatedState);
+      if (updatedState.watchlist.length === 0) {
         setSelectedCoinId('');
       } else if (selectedCoinId === coinId) {
-        setSelectedCoinId(json.state.watchlist[0].id);
+        setSelectedCoinId(updatedState.watchlist[0].id);
       }
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível remover o ativo.');
     }
   }
 
   async function handleUpdateSettings(patch: Partial<AppSettings>) {
-    const res = await fetch('/api/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) throw new Error(json.error || 'Erro ao salvar configuração');
-    if (json.state) setState(json.state);
+    const updatedState = await apiUpdateSettings(patch);
+    setState(updatedState);
   }
 
   async function handleMarkAlertsRead() {
-    const res = await fetch('/api/alerts/mark-read', { method: 'POST' });
-    if (res.ok) {
+    try {
+      await apiMarkAlertsRead();
       setState((prev) =>
         prev
           ? {
@@ -298,6 +357,8 @@ export default function App() {
             }
           : prev
       );
+    } catch {
+      // ignore
     }
   }
 
@@ -312,114 +373,82 @@ export default function App() {
     timestamp: string;
     note?: string;
   }) {
-    const res = await fetch('/api/portfolio/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) throw new Error(json.error || 'Falha ao registrar transação');
-    if (json.state) setState(json.state);
+    const updatedState = await apiAddTransaction(payload);
+    setState(updatedState);
   }
 
   async function handleDeleteTransaction(txId: string) {
-    const res = await fetch(`/api/portfolio/transactions/${encodeURIComponent(txId)}`, {
-      method: 'DELETE',
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao excluir transação.');
-      return;
+    try {
+      const updatedState = await apiDeleteTransaction(txId);
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao excluir transação.');
     }
-    if (json.state) setState(json.state);
   }
 
   async function handleDeletePortfolioCoin(coinId: string) {
-    const res = await fetch(`/api/portfolio/assets/${encodeURIComponent(coinId)}`, {
-      method: 'DELETE',
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao excluir ativo e histórico da carteira.');
-      return;
+    try {
+      const updatedState = await apiDeletePortfolioAsset(coinId);
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao excluir ativo e histórico da carteira.');
     }
-    if (json.state) setState(json.state);
   }
 
   async function handleClearPortfolioTransactions() {
-    const res = await fetch('/api/portfolio/transactions', {
-      method: 'DELETE',
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao limpar histórico de transações.');
-      return;
+    try {
+      const updatedState = await apiClearTransactions();
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao limpar histórico de transações.');
     }
-    if (json.state) setState(json.state);
   }
 
   async function handleDeleteAlert(alertId: string) {
-    const res = await fetch(`/api/alerts/${encodeURIComponent(alertId)}`, {
-      method: 'DELETE',
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao excluir alerta.');
-      return;
-    }
-    if (json.state) {
-      setState(json.state);
+    try {
+      const updatedState = await apiDeleteAlert(alertId);
+      setState(updatedState);
       setLiveBannerAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao excluir alerta.');
     }
   }
 
   async function handleClearAlerts() {
-    const res = await fetch('/api/alerts', { method: 'DELETE' });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao limpar histórico de alertas.');
-      return;
-    }
-    if (json.state) {
-      setState(json.state);
+    try {
+      const updatedState = await apiClearAlerts();
+      setState(updatedState);
       setLiveBannerAlerts([]);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao limpar histórico de alertas.');
     }
   }
 
   async function handleDeleteStudyCycle(cycleId: string) {
-    const res = await fetch(`/api/study-history/${encodeURIComponent(cycleId)}`, {
-      method: 'DELETE',
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao excluir registro de estudo.');
-      return;
+    try {
+      const updatedState = await apiDeleteStudyCycle(cycleId);
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao excluir registro de estudo.');
     }
-    if (json.state) setState(json.state);
   }
 
   async function handleClearStudyHistory() {
-    const res = await fetch('/api/study-history', { method: 'DELETE' });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Falha ao limpar histórico de estudos.');
-      return;
+    try {
+      const updatedState = await apiClearStudyHistory();
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao limpar histórico de estudos.');
     }
-    if (json.state) setState(json.state);
   }
 
   async function handleRenamePortfolio(name: string) {
-    const res = await fetch('/api/portfolio/meta', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const json = (await res.json()) as { state?: AppStatePayload; error?: string };
-    if (!res.ok) {
-      setError(json.error || 'Erro ao renomear carteira.');
-      return;
+    try {
+      const updatedState = await apiRenamePortfolio(name);
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao renomear carteira.');
     }
-    if (json.state) setState(json.state);
   }
 
   function openTransactionModal(coinId?: string) {
@@ -660,7 +689,7 @@ export default function App() {
             </h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span>
-                {streamConnected ? 'Conexão em tempo real ativa' : 'Sincronizando mercado'}
+                {streamConnected ? 'Tempo real ativo (10s)' : 'Sincronizando mercado'}
               </span>
               <span aria-hidden="true">·</span>
               <span className="font-mono tabular-nums">

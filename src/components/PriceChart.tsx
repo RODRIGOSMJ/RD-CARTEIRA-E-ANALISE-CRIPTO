@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { apiGetAssetChart } from '../services/apiClient.ts';
 import type { AIAnalysisResult, ChartPoint } from '../types/crypto.ts';
 import { formatPrice } from '../utils/format.ts';
 
@@ -31,11 +32,7 @@ export function PriceChart({
     setError(null);
     setHoverIdx(null);
 
-    fetch(`/api/chart/${encodeURIComponent(coinId)}?range=${range}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Falha ao obter série histórica');
-        return (await res.json()) as { points: ChartPoint[] };
-      })
+    apiGetAssetChart(coinId, range, symbol)
       .then((data) => {
         if (!active) return;
         setPoints(data.points ?? []);
@@ -50,7 +47,7 @@ export function PriceChart({
     return () => {
       active = false;
     };
-  }, [coinId, range]);
+  }, [coinId, range, symbol]);
 
   const width = 820;
   const height = 270;

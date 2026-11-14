@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
-import { createServer as createViteServer } from 'vite';
 import type { AppStatePayload, WatchlistAsset } from './src/types/crypto.ts';
 import {
   dispatchWebhookNotification,
@@ -24,7 +23,7 @@ import {
   saveStore,
 } from './server/store.ts';
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 async function startServer() {
   loadStore();
@@ -50,10 +49,31 @@ async function startServer() {
     }
   }
 
+  function getTrackedMarketAssets(): WatchlistAsset[] {
+    const store = getStore();
+    const map = new Map<string, WatchlistAsset>();
+    for (const w of store.watchlist) {
+      map.set(w.id, w);
+    }
+    for (const tx of store.transactions) {
+      if (!map.has(tx.coinId)) {
+        map.set(tx.coinId, {
+          id: tx.coinId,
+          symbol: tx.symbol.toUpperCase(),
+          name: tx.name,
+          binanceSymbol: `${tx.symbol.toUpperCase()}USDT`,
+          addedAt: tx.timestamp,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }
+
   async function buildStatePayload(forceMarketRefresh = false): Promise<AppStatePayload> {
     const store = getStore();
+    const trackedAssets = getTrackedMarketAssets();
     const [snapshots, usdBrlRate] = await Promise.all([
-      fetchMarketSnapshots(store.watchlist, forceMarketRefresh),
+      fetchMarketSnapshots(trackedAssets, forceMarketRefresh),
       getUsdBrlRate(),
     ]);
     evaluatePastAlerts(snapshots);
@@ -143,13 +163,14 @@ async function startServer() {
     }, intervalMs);
   }
 
-  // Periodic live price refresh every 20 seconds pushed via SSE
+  // Periodic live price refresh every 10 seconds pushed via SSE
   marketTimer = setInterval(async () => {
     if (sseClients.size === 0) return;
     try {
       const store = getStore();
+      const trackedAssets = getTrackedMarketAssets();
       const [snapshots, usdBrlRate] = await Promise.all([
-        fetchMarketSnapshots(store.watchlist, true),
+        fetchMarketSnapshots(trackedAssets, true),
         getUsdBrlRate(),
       ]);
       evaluatePastAlerts(snapshots);
@@ -163,12 +184,13 @@ async function startServer() {
     } catch {
       // silent retry on next tick
     }
-  }, 20_000);
+  }, 10_000);
 
   // API Routes
-  app.get('/api/state', async (_req, res) => {
+  app.get('/api/state', async (req, res) => {
     try {
-      const payload = await buildStatePayload(false);
+      const forceRefresh = req.query.refresh === '1';
+      const payload = await buildStatePayload(forceRefresh);
       res.json(payload);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao carregar estado do mercado.' });
@@ -608,8 +630,14 @@ async function startServer() {
     }
   });
 
+  // Guarantee /api/* never returns HTML/text 404 from SPA wildcard
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Endpoint de API não encontrado.' });
+  });
+
   // Vite dev middleware or production static build
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

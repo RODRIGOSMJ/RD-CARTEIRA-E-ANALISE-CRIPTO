@@ -1,5 +1,6 @@
 import { Bell, Check, Send, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { apiTestWebhook } from '../services/apiClient.ts';
 import type { AppSettings } from '../types/crypto.ts';
 
 interface AutomationSettingsPanelProps {
@@ -62,13 +63,7 @@ export function AutomationSettingsPanel({
     setTestingWebhook(true);
     setWebhookStatus(null);
     try {
-      const res = await fetch('/api/settings/test-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: webhookInput }),
-      });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(json.error || 'Falha no envio');
+      await apiTestWebhook(webhookInput);
       setWebhookStatus({ type: 'ok', msg: 'Mensagem de teste enviada.' });
     } catch (err: any) {
       setWebhookStatus({

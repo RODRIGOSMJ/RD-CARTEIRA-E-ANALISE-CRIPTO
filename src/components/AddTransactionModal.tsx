@@ -1,5 +1,6 @@
 import { Loader2, Plus, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { apiGetCoinPrice, apiSearchCryptos } from '../services/apiClient.ts';
 import type { MarketSnapshot, TransactionType, WatchlistAsset } from '../types/crypto.ts';
 import { formatPrice } from '../utils/format.ts';
 
@@ -120,9 +121,8 @@ export function AddTransactionModal({
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        const json = (await res.json()) as { results?: SearchResult[] };
-        setSearchResults(json.results ?? []);
+        const list = await apiSearchCryptos(q);
+        setSearchResults(list);
       } catch {
         setSearchResults([]);
       } finally {
@@ -153,17 +153,12 @@ export function AddTransactionModal({
 
     // Fetch live price for coins not yet in watchlist
     try {
-      const res = await fetch(
-        `/api/price?coinId=${encodeURIComponent(coin.id)}&symbol=${encodeURIComponent(
-          coin.symbol
-        )}`
-      );
-      const data = (await res.json()) as { priceUsd?: number | null };
-      if (data.priceUsd && data.priceUsd > 0) {
-        setLiveFetchedPriceUsd(data.priceUsd);
+      const priceUsd = await apiGetCoinPrice(coin.id, coin.symbol);
+      if (priceUsd && priceUsd > 0) {
+        setLiveFetchedPriceUsd(priceUsd);
         if (!userEditedPriceRef.current && txType !== 'ganho') {
           const displayPrice =
-            currency === 'BRL' ? data.priceUsd * usdBrlRate : data.priceUsd;
+            currency === 'BRL' ? priceUsd * usdBrlRate : priceUsd;
           setPriceInput(displayPrice.toFixed(displayPrice < 1 ? 4 : 2));
         }
       }

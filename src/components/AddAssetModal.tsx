@@ -1,5 +1,6 @@
 import { Loader2, Plus, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { apiSearchCryptos } from '../services/apiClient.ts';
 
 interface SearchResult {
   id: string;
@@ -46,9 +47,8 @@ export function AddAssetModal({
     const handle = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
-        const data = (await res.json()) as { results?: SearchResult[] };
-        setResults(data.results ?? []);
+        const list = await apiSearchCryptos(trimmed);
+        setResults(list);
       } catch {
         setResults([]);
       } finally {
