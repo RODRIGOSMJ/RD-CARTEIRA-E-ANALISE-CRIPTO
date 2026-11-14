@@ -1,15 +1,90 @@
 {
-  "watchlist": [],
-  "analyses": {},
+  "watchlist": [
+    {
+      "id": "solana",
+      "symbol": "SOL",
+      "name": "Solana",
+      "binanceSymbol": "SOLUSDT",
+      "addedAt": "2026-11-14T23:43:09.221Z"
+    }
+  ],
+  "analyses": {
+    "solana": {
+      "coinId": "solana",
+      "symbol": "SOL",
+      "action": "COMPRAR",
+      "confidence": 64,
+      "horizon": "curto_prazo",
+      "entryZoneLowUsd": 68.8,
+      "entryZoneHighUsd": 69.6,
+      "targetPriceUsd": 73.6,
+      "stopLossUsd": 67.9,
+      "riskLevel": "elevado",
+      "headline": "SOL em sobrevenda extrema próximo ao suporte; repique técnico possível",
+      "thesis": "O ativo sofreu queda de 10,84% em 24h e 22,56% em 7d, atingindo RSI 14 de 19,32 e Banda de Bollinger %B em 4,9%, configurando exaustão vendedora junto ao suporte de US$ 69,13. Apesar da tendência principal de baixa nas EMAs e MACD negativo, a leve reação positiva de 0,46% na última hora com volume elevado sugere oportunidade tática de repique até a média central de Bollinger em US$ 73,67.",
+      "portfolioAdvice": "Você possui 5 SOL com preço médio de US$ 69,47 (praticamente no zero a zero, -0,03%), mas com concentração crítica de 100% da carteira em um único ativo. Mantenha a posição atual protegida com stop loss abaixo de US$ 67,90 para capturar o repique até US$ 73,60 e evite aportar mais capital para não agravar o risco de concentração.",
+      "technicalFactors": [
+        "RSI 14 em 19,32 indica sobrevenda extrema com alto potencial de alívio comprador no curto prazo.",
+        "Bollinger %B em 4,9% com preço em US$ 69,45 testando a banda inferior (US$ 69,00) e suporte em US$ 69,13.",
+        "Momentum de volume em 188% acompanhando estabilização inicial de +0,46% na última hora."
+      ],
+      "riskFactors": [
+        "Perda consistente do suporte em US$ 69,13 e da mínima de 24h em US$ 68,60 pode acelerar novas liquidações.",
+        "EMAs 9/21/50 alinhadas em tendência de baixa e histograma MACD ainda negativo (-0,3838) mostram que a reversão não foi confirmada."
+      ],
+      "selfLearningNote": "Ciclo inicial de avaliação sem histórico prévio registrado; este sinal servirá de referência para validar a eficácia de compras contra-tendência em sobrevenda extrema com RSI abaixo de 20.",
+      "priceAtAnalysisUsd": 69.45,
+      "analyzedAt": "2026-11-14T23:43:20.107Z",
+      "cycleId": "cycle_1794699789613"
+    }
+  },
   "alerts": [],
-  "studyHistory": [],
+  "priceTriggers": [],
+  "studyHistory": [
+    {
+      "id": "cycle_1794699789613",
+      "startedAt": "2026-11-14T23:43:09.613Z",
+      "completedAt": "2026-11-14T23:43:20.107Z",
+      "assetsStudied": 1,
+      "buySignals": 1,
+      "sellSignals": 0,
+      "holdSignals": 0,
+      "alertsEmitted": 1,
+      "evaluatedAccuracyPct": null,
+      "trigger": "novo_ativo",
+      "marketSummary": "Mercado pressionado por forte correção semanal, levando a Solana a níveis extremos de sobrevenda próximos ao suporte. A carteira está 100% alocada em SOL no ponto de equilíbrio, exigindo gestão de risco rigorosa."
+    }
+  ],
   "settings": {
     "autoStudyEnabled": true,
     "intervalMinutes": 5,
     "currency": "BRL",
     "minConfidenceForAlert": 65,
-    "webhookUrl": ""
+    "webhookUrl": "",
+    "whatsapp": {
+      "enabled": false,
+      "provider": "callmebot",
+      "phoneNumber": "",
+      "callMeBotApiKey": "",
+      "customWebhookUrl": "",
+      "customWebhookToken": "",
+      "metaPhoneNumberId": "",
+      "metaAccessToken": "",
+      "forwardAiSignals": true
+    }
   },
   "portfolioName": "MINHA CARTEIRA",
-  "transactions": []
+  "transactions": [
+    {
+      "id": "tx_1794699789221_x645u",
+      "coinId": "solana",
+      "symbol": "SOL",
+      "name": "Solana",
+      "type": "compra",
+      "quantity": 5,
+      "pricePerCoinUsd": 69.47074302481978,
+      "feeUsd": 0,
+      "timestamp": "2026-11-14T23:43:00.000Z"
+    }
+  ]
 }

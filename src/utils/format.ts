@@ -21,6 +21,48 @@ export function formatPrice(
   );
 }
 
+export function formatCurrencyValue(
+  valueUsd: number,
+  currency: 'USD' | 'BRL',
+  usdBrlRate: number
+): string {
+  if (!Number.isFinite(valueUsd)) return '—';
+  const safeVal = Math.abs(valueUsd) < 1e-8 ? 0 : valueUsd;
+  const sign = safeVal < 0 ? '-' : '';
+  const converted = Math.abs(currency === 'BRL' ? safeVal * usdBrlRate : safeVal);
+  const prefix = currency === 'BRL' ? 'R$ ' : 'US$ ';
+
+  let fractionDigits = 2;
+  if (converted > 0 && converted < 0.01) fractionDigits = 4;
+  else if (converted > 0 && converted < 1) fractionDigits = 4;
+
+  return `${sign}${prefix}${converted.toLocaleString('pt-BR', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })}`;
+}
+
+export function formatSignedCurrency(
+  valueUsd: number,
+  currency: 'USD' | 'BRL',
+  usdBrlRate: number
+): string {
+  if (!Number.isFinite(valueUsd)) return '—';
+  const safeVal = Math.abs(valueUsd) < 1e-8 ? 0 : valueUsd;
+  const sign = safeVal > 0 ? '+' : safeVal < 0 ? '-' : '';
+  const converted = Math.abs(currency === 'BRL' ? safeVal * usdBrlRate : safeVal);
+  const prefix = currency === 'BRL' ? 'R$ ' : 'US$ ';
+
+  let fractionDigits = 2;
+  if (converted > 0 && converted < 0.01) fractionDigits = 4;
+  else if (converted > 0 && converted < 1) fractionDigits = 4;
+
+  return `${sign}${prefix}${converted.toLocaleString('pt-BR', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })}`;
+}
+
 export function formatCompactVolume(
   valueUsd: number,
   currency: 'USD' | 'BRL',

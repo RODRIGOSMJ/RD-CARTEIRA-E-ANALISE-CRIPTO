@@ -7,12 +7,26 @@ import type {
   PortfolioHolding,
   PortfolioSummary,
   PortfolioTransaction,
+  PriceTrigger,
   SignalAlert,
   StudyCycleSummary,
   WatchlistAsset,
+  WhatsAppSettings,
 } from '../src/types/crypto.ts';
 
 export const DEFAULT_WATCHLIST: WatchlistAsset[] = [];
+
+export const DEFAULT_WHATSAPP_SETTINGS: WhatsAppSettings = {
+  enabled: false,
+  provider: 'callmebot',
+  phoneNumber: '',
+  callMeBotApiKey: '',
+  customWebhookUrl: '',
+  customWebhookToken: '',
+  metaPhoneNumberId: '',
+  metaAccessToken: '',
+  forwardAiSignals: true,
+};
 
 export const DEFAULT_SETTINGS: AppSettings = {
   autoStudyEnabled: true,
@@ -20,12 +34,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   currency: 'BRL',
   minConfidenceForAlert: 65,
   webhookUrl: '',
+  whatsapp: DEFAULT_WHATSAPP_SETTINGS,
 };
 
 export interface PersistedStore {
   watchlist: WatchlistAsset[];
   analyses: Record<string, AIAnalysisResult>;
   alerts: SignalAlert[];
+  priceTriggers: PriceTrigger[];
   studyHistory: StudyCycleSummary[];
   settings: AppSettings;
   portfolioName: string;
@@ -39,6 +55,7 @@ let state: PersistedStore = {
   watchlist: DEFAULT_WATCHLIST,
   analyses: {},
   alerts: [],
+  priceTriggers: [],
   studyHistory: [],
   settings: DEFAULT_SETTINGS,
   portfolioName: 'MINHA CARTEIRA',
@@ -54,8 +71,16 @@ export function loadStore(): PersistedStore {
         watchlist: Array.isArray(parsed.watchlist) ? parsed.watchlist : [],
         analyses: parsed.analyses ?? {},
         alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
+        priceTriggers: Array.isArray(parsed.priceTriggers) ? parsed.priceTriggers : [],
         studyHistory: Array.isArray(parsed.studyHistory) ? parsed.studyHistory : [],
-        settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+        settings: {
+          ...DEFAULT_SETTINGS,
+          ...(parsed.settings ?? {}),
+          whatsapp: {
+            ...DEFAULT_WHATSAPP_SETTINGS,
+            ...(parsed.settings?.whatsapp ?? {}),
+          },
+        },
         portfolioName: parsed.portfolioName || 'MINHA CARTEIRA',
         transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
       };
@@ -101,6 +126,7 @@ export function computePortfolioSummary(
     totalBoughtQty: number;
     totalSoldQty: number;
     totalGainedQty: number;
+    lastTxPriceUsd: number;
   }
 
   const byCoin = new Map<string, Acc>();
@@ -120,6 +146,7 @@ export function computePortfolioSummary(
         totalBoughtQty: 0,
         totalSoldQty: 0,
         totalGainedQty: 0,
+        lastTxPriceUsd: 0,
       };
       byCoin.set(tx.coinId, acc);
     }
@@ -127,6 +154,10 @@ export function computePortfolioSummary(
     const qty = Math.max(0, Number(tx.quantity) || 0);
     const price = Math.max(0, Number(tx.pricePerCoinUsd) || 0);
     const fee = Math.max(0, Number(tx.feeUsd) || 0);
+
+    if (tx.type !== 'ganho' && price > 0) {
+      acc.lastTxPriceUsd = price;
+    }
 
     if (tx.type === 'compra') {
       const cost = qty * price + fee;
@@ -161,7 +192,8 @@ export function computePortfolioSummary(
 
   for (const acc of byCoin.values()) {
     const snap = snapshots[acc.coinId];
-    const currentPriceUsd = snap?.priceUsd ?? 0;
+    const currentPriceUsd =
+      snap?.priceUsd && snap.priceUsd > 0 ? snap.priceUsd : acc.lastTxPriceUsd;
     const currentValueUsd = acc.quantity * currentPriceUsd;
 
     const avgBuyPriceUsd =

@@ -8,11 +8,16 @@ import type {
   PortfolioHolding,
   PortfolioSummary,
   PortfolioTransaction,
+  PriceTrigger,
   SignalAction,
   SignalAlert,
   StudyCycleSummary,
   TransactionType,
+  TriggerActionHint,
+  TriggerConditionType,
+  TriggerRepeatMode,
   WatchlistAsset,
+  WhatsAppSettings,
 } from '../types/crypto.ts';
 import {
   calculateBollingerArray,
@@ -82,11 +87,24 @@ interface LocalStore {
   watchlist: WatchlistAsset[];
   analyses: Record<string, AIAnalysisResult>;
   alerts: SignalAlert[];
+  priceTriggers: PriceTrigger[];
   studyHistory: StudyCycleSummary[];
   settings: AppSettings;
   portfolioName: string;
   transactions: PortfolioTransaction[];
 }
+
+const DEFAULT_LOCAL_WHATSAPP: WhatsAppSettings = {
+  enabled: false,
+  provider: 'callmebot',
+  phoneNumber: '',
+  callMeBotApiKey: '',
+  customWebhookUrl: '',
+  customWebhookToken: '',
+  metaPhoneNumberId: '',
+  metaAccessToken: '',
+  forwardAiSignals: true,
+};
 
 const DEFAULT_LOCAL_SETTINGS: AppSettings = {
   autoStudyEnabled: true,
@@ -94,6 +112,7 @@ const DEFAULT_LOCAL_SETTINGS: AppSettings = {
   currency: 'BRL',
   minConfidenceForAlert: 65,
   webhookUrl: '',
+  whatsapp: DEFAULT_LOCAL_WHATSAPP,
 };
 
 function loadLocalStore(): LocalStore {
@@ -105,8 +124,16 @@ function loadLocalStore(): LocalStore {
         watchlist: Array.isArray(parsed.watchlist) ? parsed.watchlist : [],
         analyses: parsed.analyses ?? {},
         alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
+        priceTriggers: Array.isArray(parsed.priceTriggers) ? parsed.priceTriggers : [],
         studyHistory: Array.isArray(parsed.studyHistory) ? parsed.studyHistory : [],
-        settings: { ...DEFAULT_LOCAL_SETTINGS, ...(parsed.settings ?? {}) },
+        settings: {
+          ...DEFAULT_LOCAL_SETTINGS,
+          ...(parsed.settings ?? {}),
+          whatsapp: {
+            ...DEFAULT_LOCAL_WHATSAPP,
+            ...(parsed.settings?.whatsapp ?? {}),
+          },
+        },
         portfolioName: parsed.portfolioName || 'MINHA CARTEIRA',
         transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
       };
@@ -118,6 +145,7 @@ function loadLocalStore(): LocalStore {
     watchlist: [],
     analyses: {},
     alerts: [],
+    priceTriggers: [],
     studyHistory: [],
     settings: { ...DEFAULT_LOCAL_SETTINGS },
     portfolioName: 'MINHA CARTEIRA',
@@ -327,6 +355,32 @@ async function fetchLocalCoinbaseSpot(symbol: string): Promise<number | null> {
   return null;
 }
 
+async function fetchLocalCoinGeckoSimplePrices(
+  ids: string[]
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const validIds = Array.from(new Set(ids.filter(Boolean)));
+  if (validIds.length === 0) return map;
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(
+        validIds.join(',')
+      )}&vs_currencies=usd`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) {
+      const json = (await res.json()) as Record<string, { usd?: number }>;
+      for (const id of validIds) {
+        const p = Number(json?.[id]?.usd);
+        if (Number.isFinite(p) && p > 0) map.set(id, p);
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return map;
+}
+
 function getLocalTrackedAssets(store: LocalStore): WatchlistAsset[] {
   const map = new Map<string, WatchlistAsset>();
   for (const w of store.watchlist) map.set(w.id, w);
@@ -338,6 +392,17 @@ function getLocalTrackedAssets(store: LocalStore): WatchlistAsset[] {
         name: tx.name,
         binanceSymbol: `${tx.symbol.toUpperCase()}USDT`,
         addedAt: tx.timestamp,
+      });
+    }
+  }
+  for (const trig of store.priceTriggers) {
+    if (!map.has(trig.coinId)) {
+      map.set(trig.coinId, {
+        id: trig.coinId,
+        symbol: trig.symbol.toUpperCase(),
+        name: trig.name,
+        binanceSymbol: `${trig.symbol.toUpperCase()}USDT`,
+        addedAt: trig.createdAt,
       });
     }
   }
@@ -369,6 +434,15 @@ async function fetchLocalMarketSnapshots(
 
   const pairs = assets.map((a) => a.binanceSymbol || `${a.symbol.toUpperCase()}USDT`);
   const binanceMap = await fetchLocalBinance24hr(pairs);
+  const missingCgIds = assets
+    .filter((a) => {
+      const pair = a.binanceSymbol || `${a.symbol.toUpperCase()}USDT`;
+      const bData = binanceMap.get(pair);
+      return !bData || !Number(bData.lastPrice);
+    })
+    .map((a) => a.id);
+  const cgSimpleMap =
+    missingCgIds.length > 0 ? await fetchLocalCoinGeckoSimplePrices(missingCgIds) : new Map<string, number>();
 
   await Promise.all(
     assets.map(async (asset) => {
@@ -377,9 +451,20 @@ async function fetchLocalMarketSnapshots(
       const series = await fetchLocalSeriesForAsset(asset, '7d');
 
       let priceUsd = bData ? Number(bData.lastPrice) : 0;
+      let dataSource = bData ? 'Binance Spot' : 'Coinbase Spot';
       if (!priceUsd || !Number.isFinite(priceUsd)) {
         const cb = await fetchLocalCoinbaseSpot(asset.symbol);
-        if (cb) priceUsd = cb;
+        if (cb) {
+          priceUsd = cb;
+          dataSource = 'Coinbase Spot';
+        }
+      }
+      if (!priceUsd || !Number.isFinite(priceUsd)) {
+        const cg = cgSimpleMap.get(asset.id);
+        if (cg) {
+          priceUsd = cg;
+          dataSource = 'CoinGecko';
+        }
       }
       if ((!priceUsd || !Number.isFinite(priceUsd)) && series?.closes.length) {
         priceUsd = series.closes[series.closes.length - 1];
@@ -418,7 +503,7 @@ async function fetchLocalMarketSnapshots(
         sparkline7d: closes.slice(-42),
         indicators,
         updatedAt: new Date().toISOString(),
-        dataSource: bData ? 'Binance Spot' : 'Coinbase Spot',
+        dataSource,
       };
 
       localSnapshotCache.set(asset.id, { data: snap, fetchedAt: now });
@@ -450,6 +535,7 @@ function computeLocalPortfolioSummary(
       totalBoughtQty: number;
       totalSoldQty: number;
       totalGainedQty: number;
+      lastTxPriceUsd: number;
     }
   >();
 
@@ -467,6 +553,7 @@ function computeLocalPortfolioSummary(
         totalBoughtQty: 0,
         totalSoldQty: 0,
         totalGainedQty: 0,
+        lastTxPriceUsd: 0,
       };
       byCoin.set(tx.coinId, acc);
     }
@@ -474,6 +561,10 @@ function computeLocalPortfolioSummary(
     const qty = Math.max(0, Number(tx.quantity) || 0);
     const price = Math.max(0, Number(tx.pricePerCoinUsd) || 0);
     const fee = Math.max(0, Number(tx.feeUsd) || 0);
+
+    if (tx.type !== 'ganho' && price > 0) {
+      acc.lastTxPriceUsd = price;
+    }
 
     if (tx.type === 'compra') {
       const cost = qty * price + fee;
@@ -504,7 +595,8 @@ function computeLocalPortfolioSummary(
 
   for (const acc of byCoin.values()) {
     const snap = snapshots[acc.coinId];
-    const currentPriceUsd = snap?.priceUsd ?? 0;
+    const currentPriceUsd =
+      snap?.priceUsd && snap.priceUsd > 0 ? snap.priceUsd : acc.lastTxPriceUsd;
     const currentValueUsd = acc.quantity * currentPriceUsd;
     const avgBuyPriceUsd =
       acc.quantity > 0 ? acc.remainingCostBasisUsd / acc.quantity : 0;
@@ -774,6 +866,195 @@ function ensureLocalNextStudyAt(settings: AppSettings, reset = false): string | 
   return localNextStudyAt;
 }
 
+async function sendLocalWhatsAppMessage(
+  whatsapp: WhatsAppSettings,
+  text: string,
+  metadata?: unknown
+): Promise<{ ok: boolean; error?: string }> {
+  const phoneDigits = String(whatsapp.phoneNumber || '').replace(/\D/g, '');
+  if (whatsapp.provider === 'callmebot') {
+    if (phoneDigits.length < 10 || !whatsapp.callMeBotApiKey.trim()) {
+      return { ok: false, error: 'Configure o número com DDI e a API Key do CallMeBot.' };
+    }
+    try {
+      const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(
+        phoneDigits
+      )}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(
+        whatsapp.callMeBotApiKey.trim()
+      )}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return { ok: false, error: `CallMeBot HTTP ${res.status}` };
+      return { ok: true };
+    } catch {
+      return {
+        ok: false,
+        error: 'No modo estático sem servidor Node, o navegador bloqueou CORS do CallMeBot. Use o servidor ativo ou um gateway REST com CORS.',
+      };
+    }
+  }
+
+  if (whatsapp.provider === 'webhook_rest') {
+    if (!whatsapp.customWebhookUrl.trim().startsWith('http')) {
+      return { ok: false, error: 'Informe uma URL válida para o gateway WhatsApp.' };
+    }
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = whatsapp.customWebhookToken.trim();
+      if (token) {
+        headers['apikey'] = token;
+        headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+      const res = await fetch(whatsapp.customWebhookUrl.trim(), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          number: phoneDigits || undefined,
+          phone: phoneDigits || undefined,
+          text,
+          message: text,
+          source: 'SinalCripto IA',
+          metadata,
+        }),
+      });
+      return res.ok ? { ok: true } : { ok: false, error: `Gateway HTTP ${res.status}` };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Erro de rede ao enviar para gateway.' };
+    }
+  }
+
+  if (whatsapp.provider === 'meta_cloud') {
+    if (
+      phoneDigits.length < 10 ||
+      !whatsapp.metaPhoneNumberId.trim() ||
+      !whatsapp.metaAccessToken.trim()
+    ) {
+      return { ok: false, error: 'Preencha número, Phone Number ID e Access Token da Meta.' };
+    }
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v21.0/${encodeURIComponent(
+          whatsapp.metaPhoneNumberId.trim()
+        )}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${whatsapp.metaAccessToken.trim()}`,
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: phoneDigits,
+            type: 'text',
+            text: { body: text },
+          }),
+        }
+      );
+      return res.ok ? { ok: true } : { ok: false, error: `Meta HTTP ${res.status}` };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Erro ao conectar na Meta Cloud API.' };
+    }
+  }
+
+  return { ok: false, error: 'Provedor inválido.' };
+}
+
+async function evaluateLocalPriceTriggers(
+  store: LocalStore,
+  snapshots: Record<string, MarketSnapshot>,
+  usdBrlRate: number
+) {
+  if (!store.priceTriggers || store.priceTriggers.length === 0) return;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  let updated = false;
+
+  for (const trig of store.priceTriggers) {
+    const snap = snapshots[trig.coinId];
+    if (!snap || snap.priceUsd <= 0) continue;
+    const price = snap.priceUsd;
+
+    if (
+      (trig.conditionType === 'queda_pct' || trig.conditionType === 'alta_pct') &&
+      trig.referencePriceUsd <= 0
+    ) {
+      trig.referencePriceUsd = price;
+      updated = true;
+    }
+
+    if (!trig.enabled) continue;
+
+    if (trig.repeatMode === 'continuo' && trig.lastTriggeredAt) {
+      const elapsedMin = (nowMs - new Date(trig.lastTriggeredAt).getTime()) / 60_000;
+      if (elapsedMin < Math.max(1, trig.cooldownMinutes || 60)) continue;
+    }
+
+    let fired = false;
+    let movePct: number | undefined;
+    if (trig.conditionType === 'queda_pct' && trig.referencePriceUsd > 0) {
+      const drop = ((trig.referencePriceUsd - price) / trig.referencePriceUsd) * 100;
+      movePct = -drop;
+      if (drop >= trig.targetValue) fired = true;
+    } else if (trig.conditionType === 'alta_pct' && trig.referencePriceUsd > 0) {
+      const rise = ((price - trig.referencePriceUsd) / trig.referencePriceUsd) * 100;
+      movePct = rise;
+      if (rise >= trig.targetValue) fired = true;
+    } else if (trig.conditionType === 'abaixo_preco' && price <= trig.targetValue) {
+      fired = true;
+    } else if (trig.conditionType === 'acima_preco' && price >= trig.targetValue) {
+      fired = true;
+    }
+
+    if (!fired) continue;
+
+    const prevRef = trig.referencePriceUsd;
+    trig.lastTriggeredAt = nowIso;
+    trig.lastTriggeredPriceUsd = price;
+    trig.triggerCount = (trig.triggerCount || 0) + 1;
+    if (trig.repeatMode === 'uma_vez') trig.enabled = false;
+    else if (trig.conditionType === 'queda_pct' || trig.conditionType === 'alta_pct') {
+      trig.referencePriceUsd = price;
+    }
+
+    const mappedAction: SignalAction =
+      trig.actionHint === 'COMPRAR'
+        ? 'COMPRAR'
+        : trig.actionHint === 'VENDER'
+        ? 'VENDER'
+        : 'ESPERAR';
+
+    store.alerts.unshift({
+      id: `trig_al_${nowMs}_${Math.random().toString(36).slice(2, 6)}`,
+      coinId: trig.coinId,
+      symbol: trig.symbol,
+      name: trig.name,
+      action: mappedAction,
+      confidence: 100,
+      priceAtSignalUsd: price,
+      targetPriceUsd: mappedAction === 'VENDER' ? price * 0.94 : price * 1.06,
+      stopLossUsd: mappedAction === 'VENDER' ? price * 1.04 : price * 0.95,
+      headline: `Gatilho atingido: ${trig.symbol} — ${trig.actionHint}`,
+      reason:
+        trig.note ||
+        `Preço atingiu US$ ${price.toFixed(4)} (${
+          movePct !== undefined ? `${movePct.toFixed(2)}%` : `ref. US$ ${prevRef.toFixed(4)}`
+        }).`,
+      createdAt: nowIso,
+      read: false,
+      outcome: 'em_aberto',
+    });
+    store.alerts = store.alerts.slice(0, 120);
+    updated = true;
+
+    if (trig.sendWhatsApp && store.settings.whatsapp.enabled) {
+      const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}`;
+      const r = await sendLocalWhatsAppMessage(store.settings.whatsapp, msg, { trig });
+      trig.lastDeliveryStatus = r.ok ? 'enviado' : 'falha';
+      trig.lastDeliveryError = r.ok ? undefined : r.error;
+    }
+  }
+  if (updated) saveLocalStore(store);
+}
+
 async function buildLocalStatePayload(forceRefresh = false): Promise<AppStatePayload> {
   const store = loadLocalStore();
   const tracked = getLocalTrackedAssets(store);
@@ -782,12 +1063,16 @@ async function buildLocalStatePayload(forceRefresh = false): Promise<AppStatePay
     fetchLocalUsdBrl(),
   ]);
   evaluateLocalAlerts(store, snapshots);
+  if (forceRefresh) {
+    await evaluateLocalPriceTriggers(store, snapshots, usdBrlRate);
+  }
 
   return {
     watchlist: store.watchlist,
     snapshots,
     analyses: store.analyses,
     alerts: store.alerts,
+    triggers: store.priceTriggers,
     studyHistory: store.studyHistory,
     settings: store.settings,
     portfolio: computeLocalPortfolioSummary(store, snapshots),
@@ -1225,10 +1510,37 @@ export async function apiUpdateSettings(
     },
     async () => {
       const store = loadLocalStore();
-      store.settings = { ...store.settings, ...patch };
+      store.settings = {
+        ...store.settings,
+        ...patch,
+        whatsapp: patch.whatsapp
+          ? { ...store.settings.whatsapp, ...patch.whatsapp }
+          : store.settings.whatsapp,
+      };
       saveLocalStore(store);
       ensureLocalNextStudyAt(store.settings, true);
       return buildLocalStatePayload(false);
+    }
+  );
+}
+
+export async function apiTestWhatsApp(whatsapp: WhatsAppSettings): Promise<void> {
+  return withFallback(
+    async () => {
+      await safeFetchJson<{ ok: boolean }>('/api/whatsapp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whatsapp }),
+      });
+    },
+    async () => {
+      const r = await sendLocalWhatsAppMessage(
+        whatsapp,
+        '*SinalCripto IA — Teste de Conexão*\n\nSeu WhatsApp respondeu ao teste.'
+      );
+      if (!r.ok) {
+        throw new Error(r.error || 'Falha ao enviar teste para o WhatsApp.');
+      }
     }
   );
 }
@@ -1469,6 +1781,127 @@ export async function apiDeletePortfolioAsset(coinId: string): Promise<AppStateP
     async () => {
       const store = loadLocalStore();
       store.transactions = store.transactions.filter((t) => t.coinId !== coinId);
+      saveLocalStore(store);
+      return buildLocalStatePayload(false);
+    }
+  );
+}
+
+export async function apiCreateTrigger(payload: {
+  coinId: string;
+  symbol: string;
+  name: string;
+  conditionType: TriggerConditionType;
+  targetValue: number;
+  referencePriceUsd?: number;
+  actionHint: TriggerActionHint;
+  repeatMode: TriggerRepeatMode;
+  cooldownMinutes?: number;
+  sendWhatsApp?: boolean;
+  note?: string;
+}): Promise<AppStatePayload> {
+  return withFallback(
+    async () => {
+      const res = await safeFetchJson<{ state: AppStatePayload }>('/api/triggers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.state;
+    },
+    async () => {
+      const store = loadLocalStore();
+      let refUsd = Number(payload.referencePriceUsd) || 0;
+      if (refUsd <= 0) {
+        const fetched = await apiGetCoinPrice(payload.coinId, payload.symbol);
+        if (fetched && fetched > 0) refUsd = fetched;
+      }
+      const newTrig: PriceTrigger = {
+        id: `trig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        coinId: payload.coinId,
+        symbol: payload.symbol.toUpperCase(),
+        name: payload.name,
+        conditionType: payload.conditionType,
+        targetValue: payload.targetValue,
+        referencePriceUsd: refUsd,
+        actionHint: payload.actionHint,
+        repeatMode: payload.repeatMode,
+        cooldownMinutes: payload.cooldownMinutes ?? 60,
+        enabled: true,
+        sendWhatsApp: payload.sendWhatsApp ?? true,
+        note: payload.note?.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        triggerCount: 0,
+      };
+      store.priceTriggers.unshift(newTrig);
+      saveLocalStore(store);
+      return buildLocalStatePayload(true);
+    }
+  );
+}
+
+export async function apiUpdateTrigger(
+  triggerId: string,
+  patch: Partial<PriceTrigger> & { resetReference?: boolean }
+): Promise<AppStatePayload> {
+  return withFallback(
+    async () => {
+      const res = await safeFetchJson<{ state: AppStatePayload }>(
+        `/api/triggers/${encodeURIComponent(triggerId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }
+      );
+      return res.state;
+    },
+    async () => {
+      const store = loadLocalStore();
+      const trig = store.priceTriggers.find((t) => t.id === triggerId);
+      if (trig) {
+        if (typeof patch.enabled === 'boolean') trig.enabled = patch.enabled;
+        if (typeof patch.sendWhatsApp === 'boolean') trig.sendWhatsApp = patch.sendWhatsApp;
+        if (patch.resetReference) {
+          const live = await apiGetCoinPrice(trig.coinId, trig.symbol);
+          if (live && live > 0) trig.referencePriceUsd = live;
+        }
+        saveLocalStore(store);
+      }
+      return buildLocalStatePayload(false);
+    }
+  );
+}
+
+export async function apiDeleteTrigger(triggerId: string): Promise<AppStatePayload> {
+  return withFallback(
+    async () => {
+      const res = await safeFetchJson<{ state: AppStatePayload }>(
+        `/api/triggers/${encodeURIComponent(triggerId)}`,
+        { method: 'DELETE' }
+      );
+      return res.state;
+    },
+    async () => {
+      const store = loadLocalStore();
+      store.priceTriggers = store.priceTriggers.filter((t) => t.id !== triggerId);
+      saveLocalStore(store);
+      return buildLocalStatePayload(false);
+    }
+  );
+}
+
+export async function apiClearTriggers(): Promise<AppStatePayload> {
+  return withFallback(
+    async () => {
+      const res = await safeFetchJson<{ state: AppStatePayload }>('/api/triggers', {
+        method: 'DELETE',
+      });
+      return res.state;
+    },
+    async () => {
+      const store = loadLocalStore();
+      store.priceTriggers = [];
       saveLocalStore(store);
       return buildLocalStatePayload(false);
     }

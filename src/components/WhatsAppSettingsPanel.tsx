@@ -1,0 +1,301 @@
+import { Check, Loader2, MessageSquare, Send } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { apiTestWhatsApp } from '../services/apiClient.ts';
+import type {
+  AppSettings,
+  WhatsAppProvider,
+  WhatsAppSettings,
+} from '../types/crypto.ts';
+
+interface WhatsAppSettingsPanelProps {
+  whatsapp: WhatsAppSettings;
+  onUpdateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+export function WhatsAppSettingsPanel({
+  whatsapp,
+  onUpdateSettings,
+}: WhatsAppSettingsPanelProps) {
+  const [draft, setDraft] = useState<WhatsAppSettings>(whatsapp);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{
+    type: 'ok' | 'err';
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setDraft(whatsapp);
+  }, [whatsapp]);
+
+  const setField = <K extends keyof WhatsAppSettings>(
+    key: K,
+    val: WhatsAppSettings[K]
+  ) => {
+    setDraft((prev) => ({ ...prev, [key]: val }));
+  };
+
+  async function handleSave() {
+    setSaving(true);
+    setStatusMsg(null);
+    try {
+      await onUpdateSettings({ whatsapp: draft });
+      setStatusMsg({
+        type: 'ok',
+        text: 'Configuração de WhatsApp 24h salva com sucesso.',
+      });
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'err',
+        text: err?.message || 'Erro ao salvar configuração de WhatsApp.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleEnabled() {
+    const next = { ...draft, enabled: !draft.enabled };
+    setDraft(next);
+    setStatusMsg(null);
+    try {
+      await onUpdateSettings({ whatsapp: next });
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'err',
+        text: err?.message || 'Erro ao atualizar status do WhatsApp.',
+      });
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    setStatusMsg(null);
+    try {
+      await onUpdateSettings({ whatsapp: draft });
+      await apiTestWhatsApp(draft);
+      setStatusMsg({
+        type: 'ok',
+        text: 'Mensagem de teste enviada para seu WhatsApp.',
+      });
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'err',
+        text: err?.message || 'Falha ao enviar teste no WhatsApp.',
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-5 space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-emerald-400" />
+            Envio automático no WhatsApp (24h)
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            O servidor monitora os preços a cada 10s e envia seus gatilhos mesmo com a aba fechada.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handleToggleEnabled()}
+          className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+            draft.enabled
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+              : 'border-white/10 bg-slate-800 text-slate-300'
+          }`}
+        >
+          {draft.enabled ? 'WhatsApp ativo' : 'WhatsApp pausado'}
+        </button>
+      </div>
+
+      {/* Provider selector */}
+      <div className="space-y-2 pt-3 border-t border-white/[0.07]">
+        <label className="block text-xs text-slate-400">
+          Método de envio automático
+        </label>
+        <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.07]">
+          {(
+            [
+              { id: 'callmebot', label: 'CallMeBot (Grátis)' },
+              { id: 'webhook_rest', label: 'Z-API / Evolution' },
+              { id: 'meta_cloud', label: 'Meta Oficial' },
+            ] as Array<{ id: WhatsAppProvider; label: string }>
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setField('provider', opt.id)}
+              className={`py-1.5 px-2 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap truncate ${
+                draft.provider === opt.id
+                  ? 'bg-sky-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Phone input */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-1.5">
+          Seu número de WhatsApp (com DDI + DDD)
+        </label>
+        <input
+          type="tel"
+          value={draft.phoneNumber}
+          onChange={(e) => setField('phoneNumber', e.target.value)}
+          placeholder="+5511999999999"
+          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+        />
+      </div>
+
+      {/* Provider-specific fields */}
+      {draft.provider === 'callmebot' && (
+        <div className="space-y-3">
+          <div className="rounded-lg border border-white/[0.07] bg-[#0B0F17] px-3.5 py-2.5 text-[11px] text-slate-300 leading-relaxed space-y-1">
+            <p className="font-semibold text-slate-100">
+              Ativação gratuita em 30 segundos (CallMeBot):
+            </p>
+            <p>
+              1. Salve o contato <span className="font-mono text-emerald-400">+34 644 71 81 99</span> no WhatsApp e envie: <span className="font-mono text-slate-100">I allow callmebot to send me messages</span>
+            </p>
+            <p>2. Cole abaixo a API Key que o bot responder no seu WhatsApp.</p>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">
+              CallMeBot API Key
+            </label>
+            <input
+              type="text"
+              value={draft.callMeBotApiKey}
+              onChange={(e) => setField('callMeBotApiKey', e.target.value)}
+              placeholder="Ex: 1234567"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+        </div>
+      )}
+
+      {draft.provider === 'webhook_rest' && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">
+              URL do Endpoint (Evolution API, Z-API, Make ou n8n)
+            </label>
+            <input
+              type="url"
+              value={draft.customWebhookUrl}
+              onChange={(e) => setField('customWebhookUrl', e.target.value)}
+              placeholder="https://seu-servidor.com/message/sendText/instancia"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">
+              Token / API Key do gateway (opcional)
+            </label>
+            <input
+              type="password"
+              value={draft.customWebhookToken}
+              onChange={(e) => setField('customWebhookToken', e.target.value)}
+              placeholder="Enviado em apikey e Authorization Bearer"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+        </div>
+      )}
+
+      {draft.provider === 'meta_cloud' && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">
+              Phone Number ID (Meta Developers)
+            </label>
+            <input
+              type="text"
+              value={draft.metaPhoneNumberId}
+              onChange={(e) => setField('metaPhoneNumberId', e.target.value)}
+              placeholder="Ex: 109876543210987"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">
+              Access Token (Bearer)
+            </label>
+            <input
+              type="password"
+              value={draft.metaAccessToken}
+              onChange={(e) => setField('metaAccessToken', e.target.value)}
+              placeholder="EAAG..."
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Forward AI Signals Toggle */}
+      <label className="flex items-center justify-between gap-3 pt-3 border-t border-white/[0.07] cursor-pointer">
+        <span className="text-xs text-slate-300">
+          Enviar também sinais automáticos de Compra/Venda da IA no WhatsApp
+        </span>
+        <input
+          type="checkbox"
+          checked={draft.forwardAiSignals}
+          onChange={(e) => setField('forwardAiSignals', e.target.checked)}
+          className="w-4 h-4 accent-sky-500 cursor-pointer shrink-0"
+        />
+      </label>
+
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+        >
+          {saving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Check className="w-3.5 h-3.5" />
+          )}
+          {saving ? 'Salvando...' : 'Salvar WhatsApp'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleTest()}
+          disabled={testing}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors disabled:opacity-50 whitespace-nowrap"
+        >
+          {testing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Send className="w-3.5 h-3.5" />
+          )}
+          {testing ? 'Enviando teste...' : 'Enviar teste no WhatsApp'}
+        </button>
+      </div>
+
+      {statusMsg && (
+        <p
+          className={`text-xs rounded-lg px-3 py-2 border ${
+            statusMsg.type === 'ok'
+              ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
+              : 'text-rose-300 bg-rose-500/10 border-rose-500/25'
+          }`}
+        >
+          {statusMsg.text}
+        </p>
+      )}
+    </div>
+  );
+}

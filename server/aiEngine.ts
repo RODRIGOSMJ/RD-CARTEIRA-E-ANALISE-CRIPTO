@@ -14,6 +14,12 @@ import {
   getStore,
   saveStore,
 } from './store.ts';
+import { getUsdBrlRate } from './marketData.ts';
+import {
+  formatAiAlertsWhatsAppText,
+  isWhatsAppConfigured,
+  sendWhatsAppMessage,
+} from './whatsapp.ts';
 
 function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -470,6 +476,25 @@ ${JSON.stringify(contextPayload, null, 2)}
 
   if (store.settings.webhookUrl && newAlerts.length > 0) {
     void dispatchWebhookNotification(store.settings.webhookUrl, newAlerts);
+  }
+
+  if (
+    store.settings.whatsapp?.forwardAiSignals &&
+    isWhatsAppConfigured(store.settings.whatsapp) &&
+    newAlerts.length > 0
+  ) {
+    const actionable = newAlerts.filter(
+      (a) => a.action === 'COMPRAR' || a.action === 'VENDER'
+    );
+    if (actionable.length > 0) {
+      void getUsdBrlRate().then((rate) => {
+        const text = formatAiAlertsWhatsAppText(actionable, rate);
+        return sendWhatsAppMessage(store.settings.whatsapp, text, {
+          type: 'ai_signals',
+          alerts: actionable,
+        });
+      });
+    }
   }
 
   return {

@@ -1,6 +1,7 @@
 import {
   ArrowDownRight,
   ArrowUpRight,
+  BellRing,
   Download,
   Eye,
   EyeOff,
@@ -17,7 +18,12 @@ import type {
   PortfolioHistoryPoint,
   PortfolioSummary,
 } from '../types/crypto.ts';
-import { formatPercent, formatPrice } from '../utils/format.ts';
+import {
+  formatCurrencyValue,
+  formatPercent,
+  formatPrice,
+  formatSignedCurrency,
+} from '../utils/format.ts';
 import { SignalBadge } from './SignalBadge.tsx';
 
 interface PortfolioViewProps {
@@ -32,6 +38,7 @@ interface PortfolioViewProps {
   onClearTransactions: () => Promise<void>;
   onRenamePortfolio: (name: string) => Promise<void>;
   onSelectAssetForAI: (coinId: string) => void;
+  onOpenCreateTrigger: (coinId: string) => void;
 }
 
 const ALLOCATION_COLORS = [
@@ -57,6 +64,7 @@ export function PortfolioView({
   onClearTransactions,
   onRenamePortfolio,
   onSelectAssetForAI,
+  onOpenCreateTrigger,
 }: PortfolioViewProps) {
   const [hideBalances, setHideBalances] = useState(false);
   const [chartRange, setChartRange] = useState<'24h' | '7d' | '30d' | '90d' | 'all'>('7d');
@@ -249,7 +257,7 @@ export function PortfolioView({
 
           <div className="flex flex-wrap items-baseline gap-3">
             <span className="text-3xl font-mono font-bold text-slate-100 tabular-nums">
-              {maskValue(formatPrice(portfolio.totalValueUsd, currency, usdBrlRate))}
+              {maskValue(formatCurrencyValue(portfolio.totalValueUsd, currency, usdBrlRate))}
             </span>
             <span
               className={`inline-flex items-center gap-1 text-sm font-mono font-semibold tabular-nums ${
@@ -668,11 +676,7 @@ export function PortfolioView({
                 }`}
               >
                 {maskValue(
-                  `${portfolio.allTimeProfitUsd >= 0 ? '+' : ''}${formatPrice(
-                    portfolio.allTimeProfitUsd,
-                    currency,
-                    usdBrlRate
-                  )}`
+                  formatSignedCurrency(portfolio.allTimeProfitUsd, currency, usdBrlRate)
                 )}
               </div>
               <span
@@ -689,7 +693,7 @@ export function PortfolioView({
                 Custo base investido
               </span>
               <div className="mt-2 text-2xl font-mono font-bold text-slate-100 tabular-nums">
-                {maskValue(formatPrice(portfolio.totalCostBasisUsd, currency, usdBrlRate))}
+                {maskValue(formatCurrencyValue(portfolio.totalCostBasisUsd, currency, usdBrlRate))}
               </div>
               <span className="mt-1 inline-block text-xs text-slate-400 font-mono tabular-nums">
                 {portfolio.transactions.length} transações registradas
@@ -712,7 +716,7 @@ export function PortfolioView({
                       }`}
                     >
                       {maskValue(
-                        formatPrice(
+                        formatSignedCurrency(
                           portfolio.bestPerformer.totalPnlUsd,
                           currency,
                           usdBrlRate
@@ -741,7 +745,7 @@ export function PortfolioView({
                       }`}
                     >
                       {maskValue(
-                        formatPrice(
+                        formatSignedCurrency(
                           portfolio.worstPerformer.totalPnlUsd,
                           currency,
                           usdBrlRate
@@ -879,7 +883,7 @@ export function PortfolioView({
                           <td className="py-3.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                             <div className="font-semibold text-slate-100">
                               {maskValue(
-                                formatPrice(h.currentValueUsd, currency, usdBrlRate)
+                                formatCurrencyValue(h.currentValueUsd, currency, usdBrlRate)
                               )}
                             </div>
                             <div className="text-[11px] text-slate-400">
@@ -904,11 +908,11 @@ export function PortfolioView({
                               }`}
                             >
                               {maskValue(
-                                `${h.totalPnlUsd >= 0 ? '+' : ''}${formatPrice(
+                                formatSignedCurrency(
                                   h.totalPnlUsd,
                                   currency,
                                   usdBrlRate
-                                )}`
+                                )
                               )}
                             </div>
                             <div
@@ -932,6 +936,14 @@ export function PortfolioView({
 
                           <td className="py-3.5 px-5 text-right whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => onOpenCreateTrigger(h.coinId)}
+                                title={`Criar gatilho WhatsApp 24h em ${h.symbol}`}
+                                className="p-1.5 rounded-md border border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition-colors"
+                              >
+                                <BellRing className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => onOpenAddTransaction(h.coinId)}
@@ -1026,7 +1038,7 @@ export function PortfolioView({
                               : formatPrice(tx.pricePerCoinUsd, currency, usdBrlRate)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-semibold text-slate-100 tabular-nums">
-                            {maskValue(formatPrice(totalUsd, currency, usdBrlRate))}
+                            {maskValue(formatCurrencyValue(totalUsd, currency, usdBrlRate))}
                           </td>
                           <td className="py-3 px-3 text-slate-400 max-w-[160px] truncate">
                             {tx.note || '—'}

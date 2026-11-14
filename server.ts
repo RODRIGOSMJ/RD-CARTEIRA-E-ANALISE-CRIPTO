@@ -1,7 +1,15 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
-import type { AppStatePayload, WatchlistAsset } from './src/types/crypto.ts';
+import type {
+  AppStatePayload,
+  PriceTrigger,
+  TriggerActionHint,
+  TriggerConditionType,
+  TriggerRepeatMode,
+  WatchlistAsset,
+  WhatsAppSettings,
+} from './src/types/crypto.ts';
 import {
   dispatchWebhookNotification,
   runAutonomousStudyCycle,
@@ -16,12 +24,14 @@ import {
 } from './server/marketData.ts';
 import {
   computePortfolioSummary,
+  DEFAULT_WHATSAPP_SETTINGS,
   evaluatePastAlerts,
   getAccuracyStats,
   getStore,
   loadStore,
   saveStore,
 } from './server/store.ts';
+import { evaluatePriceTriggers, sendWhatsAppMessage } from './server/whatsapp.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -66,6 +76,17 @@ async function startServer() {
         });
       }
     }
+    for (const trig of store.priceTriggers) {
+      if (!map.has(trig.coinId)) {
+        map.set(trig.coinId, {
+          id: trig.coinId,
+          symbol: trig.symbol.toUpperCase(),
+          name: trig.name,
+          binanceSymbol: `${trig.symbol.toUpperCase()}USDT`,
+          addedAt: trig.createdAt,
+        });
+      }
+    }
     return Array.from(map.values());
   }
 
@@ -77,12 +98,16 @@ async function startServer() {
       getUsdBrlRate(),
     ]);
     evaluatePastAlerts(snapshots);
+    if (forceMarketRefresh) {
+      await evaluatePriceTriggers(snapshots, usdBrlRate);
+    }
 
     return {
       watchlist: store.watchlist,
       snapshots,
       analyses: store.analyses,
       alerts: store.alerts,
+      triggers: store.priceTriggers,
       studyHistory: store.studyHistory,
       settings: store.settings,
       portfolio: computePortfolioSummary(snapshots),
@@ -163,24 +188,37 @@ async function startServer() {
     }, intervalMs);
   }
 
-  // Periodic live price refresh every 10 seconds pushed via SSE
+  // Periodic live price refresh every 10 seconds pushed via SSE and running 24/7 for active triggers
   marketTimer = setInterval(async () => {
-    if (sseClients.size === 0) return;
+    const store = getStore();
+    const hasActiveTriggers = store.priceTriggers.some((t) => t.enabled);
+    if (sseClients.size === 0 && !hasActiveTriggers) return;
     try {
-      const store = getStore();
       const trackedAssets = getTrackedMarketAssets();
+      if (trackedAssets.length === 0) return;
       const [snapshots, usdBrlRate] = await Promise.all([
         fetchMarketSnapshots(trackedAssets, true),
         getUsdBrlRate(),
       ]);
       evaluatePastAlerts(snapshots);
-      broadcastSSE('market_tick', {
-        snapshots,
-        usdBrlRate,
-        accuracyStats: getAccuracyStats(),
-        alerts: store.alerts,
-        portfolio: computePortfolioSummary(snapshots),
-      });
+      const { triggeredAlerts } = await evaluatePriceTriggers(snapshots, usdBrlRate);
+
+      if (sseClients.size > 0) {
+        broadcastSSE('market_tick', {
+          snapshots,
+          usdBrlRate,
+          accuracyStats: getAccuracyStats(),
+          alerts: store.alerts,
+          triggers: store.priceTriggers,
+          portfolio: computePortfolioSummary(snapshots),
+        });
+        if (triggeredAlerts.length > 0) {
+          broadcastSSE('trigger_fired', {
+            alerts: triggeredAlerts,
+            triggers: store.priceTriggers,
+          });
+        }
+      }
     } catch {
       // silent retry on next tick
     }
@@ -345,6 +383,7 @@ async function startServer() {
     try {
       const store = getStore();
       const patch = req.body as Partial<typeof store.settings>;
+      const waPatch = patch.whatsapp as Partial<WhatsAppSettings> | undefined;
       store.settings = {
         ...store.settings,
         ...(typeof patch.autoStudyEnabled === 'boolean'
@@ -362,6 +401,39 @@ async function startServer() {
         ...(typeof patch.webhookUrl === 'string'
           ? { webhookUrl: patch.webhookUrl.trim() }
           : {}),
+        whatsapp: waPatch
+          ? {
+              ...DEFAULT_WHATSAPP_SETTINGS,
+              ...(store.settings.whatsapp ?? {}),
+              ...(typeof waPatch.enabled === 'boolean' ? { enabled: waPatch.enabled } : {}),
+              ...(waPatch.provider === 'callmebot' ||
+              waPatch.provider === 'webhook_rest' ||
+              waPatch.provider === 'meta_cloud'
+                ? { provider: waPatch.provider }
+                : {}),
+              ...(typeof waPatch.phoneNumber === 'string'
+                ? { phoneNumber: waPatch.phoneNumber.trim() }
+                : {}),
+              ...(typeof waPatch.callMeBotApiKey === 'string'
+                ? { callMeBotApiKey: waPatch.callMeBotApiKey.trim() }
+                : {}),
+              ...(typeof waPatch.customWebhookUrl === 'string'
+                ? { customWebhookUrl: waPatch.customWebhookUrl.trim() }
+                : {}),
+              ...(typeof waPatch.customWebhookToken === 'string'
+                ? { customWebhookToken: waPatch.customWebhookToken.trim() }
+                : {}),
+              ...(typeof waPatch.metaPhoneNumberId === 'string'
+                ? { metaPhoneNumberId: waPatch.metaPhoneNumberId.trim() }
+                : {}),
+              ...(typeof waPatch.metaAccessToken === 'string'
+                ? { metaAccessToken: waPatch.metaAccessToken.trim() }
+                : {}),
+              ...(typeof waPatch.forwardAiSignals === 'boolean'
+                ? { forwardAiSignals: waPatch.forwardAiSignals }
+                : {}),
+            }
+          : store.settings.whatsapp,
       };
       saveStore();
       scheduleNextStudyTimer();
@@ -369,6 +441,27 @@ async function startServer() {
       res.json({ state: fullState });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao atualizar configurações.' });
+    }
+  });
+
+  app.post('/api/whatsapp/test', async (req, res) => {
+    try {
+      const store = getStore();
+      const bodyWa = (req.body?.whatsapp ?? req.body ?? {}) as Partial<WhatsAppSettings>;
+      const merged: WhatsAppSettings = {
+        ...DEFAULT_WHATSAPP_SETTINGS,
+        ...(store.settings.whatsapp ?? {}),
+        ...bodyWa,
+      };
+      const testText =
+        '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
+      const result = await sendWhatsAppMessage(merged, testText, { type: 'whatsapp_test' });
+      if (!result.ok) {
+        return res.status(400).json({ error: result.error || 'Falha ao enviar mensagem de teste.' });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao testar WhatsApp.' });
     }
   });
 
@@ -627,6 +720,157 @@ async function startServer() {
       res.json({ state: fullState });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao limpar histórico de estudos.' });
+    }
+  });
+
+  // 24/7 Price Triggers & WhatsApp Alerts endpoints
+  app.post('/api/triggers', async (req, res) => {
+    try {
+      const {
+        coinId,
+        symbol,
+        name,
+        conditionType,
+        targetValue,
+        referencePriceUsd,
+        actionHint,
+        repeatMode,
+        cooldownMinutes,
+        sendWhatsApp,
+        note,
+      } = req.body as {
+        coinId?: string;
+        symbol?: string;
+        name?: string;
+        conditionType?: TriggerConditionType;
+        targetValue?: number;
+        referencePriceUsd?: number;
+        actionHint?: TriggerActionHint;
+        repeatMode?: TriggerRepeatMode;
+        cooldownMinutes?: number;
+        sendWhatsApp?: boolean;
+        note?: string;
+      };
+
+      if (!coinId || !symbol || !name) {
+        return res.status(400).json({ error: 'Selecione um criptoativo válido.' });
+      }
+      if (
+        conditionType !== 'queda_pct' &&
+        conditionType !== 'alta_pct' &&
+        conditionType !== 'abaixo_preco' &&
+        conditionType !== 'acima_preco'
+      ) {
+        return res.status(400).json({ error: 'Tipo de condição inválido.' });
+      }
+      const parsedTarget = Number(targetValue);
+      if (!Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+        return res.status(400).json({ error: 'Informe um valor alvo maior que zero.' });
+      }
+      if (
+        (conditionType === 'queda_pct' || conditionType === 'alta_pct') &&
+        parsedTarget > 99.9 &&
+        conditionType === 'queda_pct'
+      ) {
+        return res.status(400).json({ error: 'Percentual de queda deve ser menor que 100%.' });
+      }
+
+      const store = getStore();
+      const upperSym = symbol.toUpperCase();
+
+      let refUsd = Number(referencePriceUsd) || 0;
+      if (refUsd <= 0) {
+        const fetched = await fetchSingleCoinPriceUsd(coinId, upperSym);
+        if (fetched && fetched > 0) refUsd = fetched;
+      }
+
+      const newTrigger: PriceTrigger = {
+        id: `trig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        coinId,
+        symbol: upperSym,
+        name,
+        conditionType,
+        targetValue: parsedTarget,
+        referencePriceUsd: refUsd,
+        actionHint:
+          actionHint === 'COMPRAR' || actionHint === 'VENDER' || actionHint === 'AVALIAR'
+            ? actionHint
+            : 'COMPRAR',
+        repeatMode: repeatMode === 'continuo' ? 'continuo' : 'uma_vez',
+        cooldownMinutes: Math.max(1, Math.min(1440, Number(cooldownMinutes) || 60)),
+        enabled: true,
+        sendWhatsApp: typeof sendWhatsApp === 'boolean' ? sendWhatsApp : true,
+        note: note ? String(note).trim().slice(0, 140) : undefined,
+        createdAt: new Date().toISOString(),
+        triggerCount: 0,
+      };
+
+      store.priceTriggers.unshift(newTrigger);
+      saveStore();
+
+      const fullState = await buildStatePayload(true);
+      res.json({ trigger: newTrigger, state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao salvar gatilho.' });
+    }
+  });
+
+  app.patch('/api/triggers/:triggerId', async (req, res) => {
+    try {
+      const { triggerId } = req.params;
+      const store = getStore();
+      const trig = store.priceTriggers.find((t) => t.id === triggerId);
+      if (!trig) {
+        return res.status(404).json({ error: 'Gatilho não encontrado.' });
+      }
+      const patch = req.body as Partial<PriceTrigger> & { resetReference?: boolean };
+      if (typeof patch.enabled === 'boolean') trig.enabled = patch.enabled;
+      if (typeof patch.sendWhatsApp === 'boolean') trig.sendWhatsApp = patch.sendWhatsApp;
+      if (typeof patch.targetValue === 'number' && Number.isFinite(patch.targetValue) && patch.targetValue > 0) {
+        trig.targetValue = patch.targetValue;
+      }
+      if (patch.actionHint === 'COMPRAR' || patch.actionHint === 'VENDER' || patch.actionHint === 'AVALIAR') {
+        trig.actionHint = patch.actionHint;
+      }
+      if (patch.repeatMode === 'uma_vez' || patch.repeatMode === 'continuo') {
+        trig.repeatMode = patch.repeatMode;
+      }
+      if (patch.resetReference) {
+        const live = await fetchSingleCoinPriceUsd(trig.coinId, trig.symbol);
+        if (live && live > 0) {
+          trig.referencePriceUsd = live;
+        }
+      }
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ trigger: trig, state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao atualizar gatilho.' });
+    }
+  });
+
+  app.delete('/api/triggers/:triggerId', async (req, res) => {
+    try {
+      const { triggerId } = req.params;
+      const store = getStore();
+      store.priceTriggers = store.priceTriggers.filter((t) => t.id !== triggerId);
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao excluir gatilho.' });
+    }
+  });
+
+  app.delete('/api/triggers', async (_req, res) => {
+    try {
+      const store = getStore();
+      store.priceTriggers = [];
+      saveStore();
+      const fullState = await buildStatePayload(false);
+      res.json({ state: fullState });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao limpar gatilhos.' });
     }
   });
 

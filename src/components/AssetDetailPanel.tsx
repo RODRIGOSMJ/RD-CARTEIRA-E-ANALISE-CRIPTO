@@ -1,4 +1,4 @@
-import { BrainCircuit, Plus, RefreshCw, ShieldAlert, Trash2, Wallet } from 'lucide-react';
+import { BellRing, BrainCircuit, Plus, RefreshCw, ShieldAlert, Trash2, Wallet } from 'lucide-react';
 import type {
   AIAnalysisResult,
   MarketSnapshot,
@@ -10,6 +10,7 @@ import {
   formatPercent,
   formatPrice,
   formatRelativeTime,
+  formatSignedCurrency,
 } from '../utils/format.ts';
 import { PriceChart } from './PriceChart.tsx';
 import { SignalBadge } from './SignalBadge.tsx';
@@ -26,6 +27,7 @@ interface AssetDetailPanelProps {
   onStudySingle: (coinId: string) => void;
   onRemoveAsset: (coinId: string) => void;
   onAddTransaction: (coinId: string) => void;
+  onCreateTrigger: (coinId: string) => void;
 }
 
 export function AssetDetailPanel({
@@ -40,6 +42,7 @@ export function AssetDetailPanel({
   onStudySingle,
   onRemoveAsset,
   onAddTransaction,
+  onCreateTrigger,
 }: AssetDetailPanelProps) {
   const ind = snapshot?.indicators;
 
@@ -105,6 +108,16 @@ export function AssetDetailPanel({
 
           <button
             type="button"
+            onClick={() => onCreateTrigger(asset.id)}
+            title={`Criar gatilho WhatsApp 24h para ${asset.symbol}`}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition-colors whitespace-nowrap shrink-0"
+          >
+            <BellRing className="w-3.5 h-3.5" />
+            Gatilho
+          </button>
+
+          <button
+            type="button"
             onClick={() => onAddTransaction(asset.id)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
           >
@@ -162,8 +175,7 @@ export function AssetDetailPanel({
               holding.totalPnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
             }`}
           >
-            Resultado: {holding.totalPnlUsd >= 0 ? '+' : ''}
-            {formatPrice(holding.totalPnlUsd, currency, usdBrlRate)} (
+            Resultado: {formatSignedCurrency(holding.totalPnlUsd, currency, usdBrlRate)} (
             {formatPercent(holding.totalPnlPct)})
           </div>
         </div>

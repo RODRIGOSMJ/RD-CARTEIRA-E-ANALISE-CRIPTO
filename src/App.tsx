@@ -14,35 +14,46 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AddAssetModal } from './components/AddAssetModal.tsx';
 import { AddTransactionModal } from './components/AddTransactionModal.tsx';
+import { AddTriggerModal } from './components/AddTriggerModal.tsx';
 import { AssetDetailPanel } from './components/AssetDetailPanel.tsx';
 import { AutomationSettingsPanel } from './components/AutomationSettingsPanel.tsx';
 import { PortfolioView } from './components/PortfolioView.tsx';
 import { SignalBadge } from './components/SignalBadge.tsx';
 import { Sparkline } from './components/Sparkline.tsx';
+import { TriggersPanel } from './components/TriggersPanel.tsx';
+import { WhatsAppSettingsPanel } from './components/WhatsAppSettingsPanel.tsx';
 import {
   apiAddTransaction,
   apiAddWatchlist,
   apiClearAlerts,
   apiClearStudyHistory,
   apiClearTransactions,
+  apiClearTriggers,
+  apiCreateTrigger,
   apiDeleteAlert,
   apiDeletePortfolioAsset,
   apiDeleteStudyCycle,
   apiDeleteTransaction,
+  apiDeleteTrigger,
   apiGetState,
   apiMarkAlertsRead,
   apiRemoveWatchlist,
   apiRenamePortfolio,
   apiRunStudy,
   apiUpdateSettings,
+  apiUpdateTrigger,
   getBackendMode,
 } from './services/apiClient.ts';
 import type {
   AppSettings,
   AppStatePayload,
+  PriceTrigger,
   SignalAction,
   SignalAlert,
   TransactionType,
+  TriggerActionHint,
+  TriggerConditionType,
+  TriggerRepeatMode,
 } from './types/crypto.ts';
 import {
   formatCompactVolume,
@@ -66,6 +77,10 @@ export default function App() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [txModalOpen, setTxModalOpen] = useState(false);
   const [txPreselectedCoinId, setTxPreselectedCoinId] = useState<string | null>(null);
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false);
+  const [triggerPreselectedCoinId, setTriggerPreselectedCoinId] = useState<string | null>(null);
+  const [alertsSubTab, setAlertsSubTab] = useState<'triggers' | 'alerts'>('triggers');
+  const [rightSettingsTab, setRightSettingsTab] = useState<'whatsapp' | 'automacao'>('whatsapp');
   const [studyStatusMsg, setStudyStatusMsg] = useState<string | null>(null);
   const [liveBannerAlerts, setLiveBannerAlerts] = useState<SignalAlert[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -135,6 +150,7 @@ export default function App() {
           usdBrlRate: number;
           accuracyStats: AppStatePayload['accuracyStats'];
           alerts: AppStatePayload['alerts'];
+          triggers?: PriceTrigger[];
           portfolio: AppStatePayload['portfolio'];
         };
         lastMarketTickAtRef.current = Date.now();
@@ -147,12 +163,46 @@ export default function App() {
                 usdBrlRate: data.usdBrlRate,
                 accuracyStats: data.accuracyStats,
                 alerts: data.alerts,
+                triggers: data.triggers ?? prev.triggers,
                 portfolio: data.portfolio,
               }
             : prev
         );
       } catch {
         // ignore parse error
+      }
+    });
+
+    es.addEventListener('trigger_fired', (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data) as {
+          alerts: SignalAlert[];
+          triggers: PriceTrigger[];
+        };
+        if (data.alerts && data.alerts.length > 0) {
+          setLiveBannerAlerts((prev) => [...data.alerts, ...prev].slice(0, 3));
+          const first = data.alerts[0];
+          if (soundEnabledRef.current && first) {
+            playAlertChime(first.action);
+          }
+          if (first && settingsRef.current) {
+            sendBrowserNotification(
+              first,
+              settingsRef.current.currency,
+              usdBrlRef.current
+            );
+          }
+        }
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                triggers: data.triggers ?? prev.triggers,
+              }
+            : prev
+        );
+      } catch {
+        // ignore
       }
     });
 
@@ -249,6 +299,7 @@ export default function App() {
                 usdBrlRate: fresh.usdBrlRate,
                 accuracyStats: fresh.accuracyStats,
                 alerts: fresh.alerts,
+                triggers: fresh.triggers,
                 portfolio: fresh.portfolio,
                 analyses: fresh.analyses,
                 studyHistory: fresh.studyHistory,
@@ -454,6 +505,64 @@ export default function App() {
   function openTransactionModal(coinId?: string) {
     setTxPreselectedCoinId(coinId ?? null);
     setTxModalOpen(true);
+  }
+
+  function openTriggerModal(coinId?: string) {
+    setTriggerPreselectedCoinId(coinId ?? null);
+    setTriggerModalOpen(true);
+  }
+
+  async function handleCreateTrigger(payload: {
+    coinId: string;
+    symbol: string;
+    name: string;
+    conditionType: TriggerConditionType;
+    targetValue: number;
+    referencePriceUsd?: number;
+    actionHint: TriggerActionHint;
+    repeatMode: TriggerRepeatMode;
+    cooldownMinutes?: number;
+    sendWhatsApp?: boolean;
+    note?: string;
+  }) {
+    const updatedState = await apiCreateTrigger(payload);
+    setState(updatedState);
+  }
+
+  async function handleToggleTrigger(triggerId: string, enabled: boolean) {
+    try {
+      const updatedState = await apiUpdateTrigger(triggerId, { enabled });
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao atualizar gatilho.');
+    }
+  }
+
+  async function handleResetTriggerRef(triggerId: string) {
+    try {
+      const updatedState = await apiUpdateTrigger(triggerId, { resetReference: true });
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao atualizar preço base do gatilho.');
+    }
+  }
+
+  async function handleDeleteTrigger(triggerId: string) {
+    try {
+      const updatedState = await apiDeleteTrigger(triggerId);
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao excluir gatilho.');
+    }
+  }
+
+  async function handleClearTriggers() {
+    try {
+      const updatedState = await apiClearTriggers();
+      setState(updatedState);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao limpar gatilhos.');
+    }
   }
 
   const filteredAssets = useMemo(() => {
@@ -1026,6 +1135,7 @@ export default function App() {
                       onStudySingle={(coinId) => handleRunStudy(coinId)}
                       onRemoveAsset={handleRemoveAsset}
                       onAddTransaction={(coinId) => openTransactionModal(coinId)}
+                      onCreateTrigger={(coinId) => openTriggerModal(coinId)}
                     />
                   )}
                 </div>
@@ -1208,6 +1318,7 @@ export default function App() {
                   setSelectedCoinId(coinId);
                   setActiveTab('painel');
                 }}
+                onOpenCreateTrigger={(coinId) => openTriggerModal(coinId)}
               />
             )}
 
@@ -1467,122 +1578,200 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 4: CENTRAL DE ALERTAS */}
+            {/* VIEW 4: CENTRAL DE ALERTAS & GATILHOS WHATSAPP 24H */}
             {activeTab === 'alertas' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-7 rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-                  <div className="px-5 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-semibold text-slate-100">
-                        Registro completo de sugestões ({state.alerts.length})
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Acompanhamento de retorno real desde o momento em que cada sugestão foi enviada.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {counts.unread > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleMarkAlertsRead}
-                          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-200 whitespace-nowrap"
-                        >
-                          Marcar todas como lidas
-                        </button>
-                      )}
-                      {state.alerts.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => void handleClearAlerts()}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-500/25 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors whitespace-nowrap"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          Limpar histórico
-                        </button>
-                      )}
-                    </div>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-1 rounded-lg bg-[#111827] p-1 border border-white/[0.08]">
+                    <button
+                      type="button"
+                      onClick={() => setAlertsSubTab('triggers')}
+                      className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        alertsSubTab === 'triggers'
+                          ? 'bg-sky-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Gatilhos WhatsApp 24h ({(state.triggers ?? []).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAlertsSubTab('alerts')}
+                      className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        alertsSubTab === 'alerts'
+                          ? 'bg-sky-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Histórico de Alertas ({state.alerts.length})
+                    </button>
                   </div>
 
-                  <div className="divide-y divide-white/[0.06]">
-                    {state.alerts.length === 0 ? (
-                      <div className="p-8 text-center text-xs text-slate-400">
-                        Sem alertas registrados ainda.
-                      </div>
-                    ) : (
-                      state.alerts.map((alert) => (
-                        <div key={alert.id} className="p-5 space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <span className="font-mono font-bold text-sm text-slate-100">
-                                {alert.symbol}
-                              </span>
-                              <span className="text-xs text-slate-400">{alert.name}</span>
-                              <SignalBadge action={alert.action} compact />
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-mono text-slate-500 tabular-nums">
-                                {new Date(alert.createdAt).toLocaleString('pt-BR', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => void handleDeleteAlert(alert.id)}
-                                title="Excluir alerta"
-                                aria-label="Excluir alerta"
-                                className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <p className="text-sm font-medium text-slate-200">
-                            {alert.headline}
-                          </p>
-                          <p className="text-xs text-slate-400 leading-relaxed">
-                            {alert.reason}
-                          </p>
-
-                          <div className="pt-1 flex flex-wrap items-center gap-3 text-xs font-mono tabular-nums text-slate-400">
-                            <span>
-                              Sinal em{' '}
-                              {formatPrice(
-                                alert.priceAtSignalUsd,
-                                state.settings.currency,
-                                state.usdBrlRate
-                              )}
-                            </span>
-                            <span aria-hidden="true">·</span>
-                            <span>
-                              Alvo{' '}
-                              {formatPrice(
-                                alert.targetPriceUsd,
-                                state.settings.currency,
-                                state.usdBrlRate
-                              )}
-                            </span>
-                            <span aria-hidden="true">·</span>
-                            <span>Confiança {alert.confidence}%</span>
-                            <span aria-hidden="true">·</span>
-                            {renderOutcomeText(alert)}
-                          </div>
-                        </div>
-                      ))
-                    )}
+                  <div className="flex items-center gap-1 rounded-lg bg-[#111827] p-1 border border-white/[0.08]">
+                    <button
+                      type="button"
+                      onClick={() => setRightSettingsTab('whatsapp')}
+                      className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        rightSettingsTab === 'whatsapp'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Configurar WhatsApp 24h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRightSettingsTab('automacao')}
+                      className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        rightSettingsTab === 'automacao'
+                          ? 'bg-sky-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Automação IA & Webhook
+                    </button>
                   </div>
                 </div>
 
-                <div className="lg:col-span-5">
-                  <AutomationSettingsPanel
-                    settings={state.settings}
-                    soundEnabled={soundEnabled}
-                    onToggleSound={() => setSoundEnabled((v) => !v)}
-                    onUpdateSettings={handleUpdateSettings}
-                  />
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  <div className="lg:col-span-7">
+                    {alertsSubTab === 'triggers' ? (
+                      <TriggersPanel
+                        triggers={state.triggers ?? []}
+                        snapshots={state.snapshots}
+                        currency={state.settings.currency}
+                        usdBrlRate={state.usdBrlRate}
+                        whatsappEnabled={Boolean(state.settings.whatsapp?.enabled)}
+                        onOpenNewTrigger={() => openTriggerModal()}
+                        onToggleTrigger={handleToggleTrigger}
+                        onResetReference={handleResetTriggerRef}
+                        onDeleteTrigger={handleDeleteTrigger}
+                        onClearTriggers={handleClearTriggers}
+                      />
+                    ) : (
+                      <div className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
+                        <div className="px-5 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h2 className="text-base font-semibold text-slate-100">
+                              Registro completo de sugestões ({state.alerts.length})
+                            </h2>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              Acompanhamento de retorno real desde o momento em que cada sugestão ou gatilho foi disparado.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {counts.unread > 0 && (
+                              <button
+                                type="button"
+                                onClick={handleMarkAlertsRead}
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-200 whitespace-nowrap"
+                              >
+                                Marcar todas como lidas
+                              </button>
+                            )}
+                            {state.alerts.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void handleClearAlerts()}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-500/25 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors whitespace-nowrap"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Limpar histórico
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="divide-y divide-white/[0.06]">
+                          {state.alerts.length === 0 ? (
+                            <div className="p-8 text-center text-xs text-slate-400">
+                              Sem alertas registrados ainda.
+                            </div>
+                          ) : (
+                            state.alerts.map((alert) => (
+                              <div key={alert.id} className="p-5 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="font-mono font-bold text-sm text-slate-100">
+                                      {alert.symbol}
+                                    </span>
+                                    <span className="text-xs text-slate-400">{alert.name}</span>
+                                    <SignalBadge action={alert.action} compact />
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs font-mono text-slate-500 tabular-nums">
+                                      {new Date(alert.createdAt).toLocaleString('pt-BR', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteAlert(alert.id)}
+                                      title="Excluir alerta"
+                                      aria-label="Excluir alerta"
+                                      className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <p className="text-sm font-medium text-slate-200">
+                                  {alert.headline}
+                                </p>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                  {alert.reason}
+                                </p>
+
+                                <div className="pt-1 flex flex-wrap items-center gap-3 text-xs font-mono tabular-nums text-slate-400">
+                                  <span>
+                                    Sinal em{' '}
+                                    {formatPrice(
+                                      alert.priceAtSignalUsd,
+                                      state.settings.currency,
+                                      state.usdBrlRate
+                                    )}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    Alvo{' '}
+                                    {formatPrice(
+                                      alert.targetPriceUsd,
+                                      state.settings.currency,
+                                      state.usdBrlRate
+                                    )}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>Confiança {alert.confidence}%</span>
+                                  <span aria-hidden="true">·</span>
+                                  {renderOutcomeText(alert)}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="lg:col-span-5">
+                    {rightSettingsTab === 'whatsapp' ? (
+                      <WhatsAppSettingsPanel
+                        whatsapp={state.settings.whatsapp}
+                        onUpdateSettings={handleUpdateSettings}
+                      />
+                    ) : (
+                      <AutomationSettingsPanel
+                        settings={state.settings}
+                        soundEnabled={soundEnabled}
+                        onToggleSound={() => setSoundEnabled((v) => !v)}
+                        onUpdateSettings={handleUpdateSettings}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1621,6 +1810,20 @@ export default function App() {
           preselectedCoinId={txPreselectedCoinId}
           onClose={() => setTxModalOpen(false)}
           onSubmit={handleAddTransaction}
+        />
+      )}
+
+      {state && (
+        <AddTriggerModal
+          open={triggerModalOpen}
+          watchlist={state.watchlist}
+          snapshots={state.snapshots}
+          currency={state.settings.currency}
+          usdBrlRate={state.usdBrlRate}
+          whatsappEnabled={Boolean(state.settings.whatsapp?.enabled)}
+          preselectedCoinId={triggerPreselectedCoinId}
+          onClose={() => setTriggerModalOpen(false)}
+          onSubmit={handleCreateTrigger}
         />
       )}
     </div>

@@ -105,12 +105,59 @@ export interface StudyCycleSummary {
   marketSummary: string;
 }
 
+export type TriggerConditionType =
+  | 'queda_pct'
+  | 'alta_pct'
+  | 'abaixo_preco'
+  | 'acima_preco';
+
+export type TriggerActionHint = 'COMPRAR' | 'VENDER' | 'AVALIAR';
+
+export type TriggerRepeatMode = 'uma_vez' | 'continuo';
+
+export type WhatsAppProvider = 'callmebot' | 'webhook_rest' | 'meta_cloud';
+
+export interface WhatsAppSettings {
+  enabled: boolean;
+  provider: WhatsAppProvider;
+  phoneNumber: string;
+  callMeBotApiKey: string;
+  customWebhookUrl: string;
+  customWebhookToken: string;
+  metaPhoneNumberId: string;
+  metaAccessToken: string;
+  forwardAiSignals: boolean;
+}
+
+export interface PriceTrigger {
+  id: string;
+  coinId: string;
+  symbol: string;
+  name: string;
+  conditionType: TriggerConditionType;
+  targetValue: number;
+  referencePriceUsd: number;
+  actionHint: TriggerActionHint;
+  repeatMode: TriggerRepeatMode;
+  cooldownMinutes: number;
+  enabled: boolean;
+  sendWhatsApp: boolean;
+  note?: string;
+  createdAt: string;
+  lastTriggeredAt?: string;
+  lastTriggeredPriceUsd?: number;
+  lastDeliveryStatus?: 'enviado' | 'falha' | 'sem_whatsapp';
+  lastDeliveryError?: string;
+  triggerCount: number;
+}
+
 export interface AppSettings {
   autoStudyEnabled: boolean;
   intervalMinutes: number;
   currency: 'USD' | 'BRL';
   minConfidenceForAlert: number;
   webhookUrl: string;
+  whatsapp: WhatsAppSettings;
 }
 
 export interface ChartPoint {
@@ -185,6 +232,7 @@ export interface AppStatePayload {
   snapshots: Record<string, MarketSnapshot>;
   analyses: Record<string, AIAnalysisResult>;
   alerts: SignalAlert[];
+  triggers: PriceTrigger[];
   studyHistory: StudyCycleSummary[];
   settings: AppSettings;
   portfolio: PortfolioSummary;
