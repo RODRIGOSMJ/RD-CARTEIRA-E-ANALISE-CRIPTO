@@ -64,22 +64,27 @@ export function AssetDetailPanel({
   return (
     <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
       {/* Asset header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-b border-slate-200 dark:border-white/[0.07]">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 dark:border-white/[0.07]">
+        <div className="space-y-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <CryptoLogo
               symbol={asset.symbol}
               coinId={asset.id}
               name={asset.name}
               size="lg"
             />
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {asset.name}
             </h2>
             <span className="text-sm font-mono font-medium text-slate-500 dark:text-slate-400">
               {asset.symbol}
             </span>
-            <SignalBadge action={analysis?.action} />
+            <SignalBadge
+              action={analysis?.action}
+              rsi14={ind?.rsi14}
+              change7dPct={snapshot?.change7dPct}
+              headline={analysis?.headline}
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
             <span>{snapshot?.dataSource || 'Mercado'}</span>
@@ -96,9 +101,9 @@ export function AssetDetailPanel({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {snapshot && (
-            <div className="text-right mr-2">
+            <div className="text-left sm:text-right mr-1 sm:mr-2">
               <div className="text-xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                 {formatPrice(snapshot.priceUsd, currency, usdBrlRate)}
               </div>
@@ -193,7 +198,7 @@ export function AssetDetailPanel({
       )}
 
       {/* Main chart + levels */}
-      <div className="p-5 space-y-6">
+      <div className="p-4 sm:p-5 space-y-5 sm:space-y-6">
         <PriceChart
           coinId={asset.id}
           symbol={asset.symbol}

@@ -1723,12 +1723,12 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-[#0B0F17] dark:text-slate-100 transition-colors">
       {/* Top Bar Contract: 3 zones separated by gap-8 */}
       <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-white/[0.08] bg-white/95 dark:bg-[#0B0F17]/95 backdrop-blur-md">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
+        <div className="max-w-[1440px] mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-8">
           {/* Zone 1: Single-line brand wordmark */}
           <button
             type="button"
             onClick={() => setActiveTab('painel')}
-            className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
+            className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
           >
             SinalCripto IA
           </button>
@@ -1867,21 +1867,28 @@ export default function App() {
                   : 'Executar estudo completo agora'
               }
               onClick={() => handleRunStudy()}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-xs"
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-xs"
             >
               {state?.isStudying ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Sparkles className="w-3.5 h-3.5" />
               )}
-              {state?.isStudying ? 'Estudando...' : 'Estudar agora'}
+              {state?.isStudying ? (
+                <span>Estudando...</span>
+              ) : (
+                <>
+                  <span className="sm:hidden">Estudar</span>
+                  <span className="hidden sm:inline">Estudar agora</span>
+                </>
+              )}
             </button>
           </div>
         </div>
       </header>
 
       {/* Mobile secondary nav */}
-      <div className="md:hidden border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0F1520] px-4 py-2 flex items-center gap-4 overflow-x-auto text-xs font-medium">
+      <div className="md:hidden border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0F1520] px-3 sm:px-4 py-2 flex items-center gap-3.5 overflow-x-auto text-xs font-medium">
         {(
           [
             { id: 'painel', label: 'Painel' },
@@ -1927,7 +1934,7 @@ export default function App() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="flex-1 max-w-[1440px] w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-5 sm:space-y-6 overflow-x-clip">
         {/* Live Automatic Signal Alert Banner */}
         {liveBannerAlerts.length > 0 && (
           <div className="rounded-xl border border-sky-300 dark:border-sky-500/30 bg-white dark:bg-[#111827] shadow-xs dark:shadow-none px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -1954,7 +1961,13 @@ export default function App() {
                       size="xs"
                     />
                     <span className="font-mono font-semibold">{al.symbol}</span>
-                    <SignalBadge action={al.action} compact />
+                    <SignalBadge
+                      action={al.action}
+                      rsi14={state?.snapshots[al.coinId]?.indicators.rsi14}
+                      change7dPct={state?.snapshots[al.coinId]?.change7dPct}
+                      headline={al.headline}
+                      compact
+                    />
                   </button>
                 ))}
               </div>
@@ -2268,29 +2281,13 @@ export default function App() {
                           </div>
                         </div>
                       ) : (
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-transparent text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                              <th className="py-2.5 px-5">Ativo</th>
-                              <th className="py-2.5 px-3 text-right">Preço</th>
-                              <th className="py-2.5 px-3 text-right">24h</th>
-                              <th className="py-2.5 px-3 hidden sm:table-cell">7 dias</th>
-                              <th className="py-2.5 px-3 text-right">RSI (14)</th>
-                              <th className="py-2.5 px-3">Recomendação</th>
-                              <th className="py-2.5 px-3 text-right">Confiança</th>
-                              <th className="py-2.5 px-4 text-right">Excluir</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-sm">
+                        <>
+                          {/* Mobile stacked cards (< sm) */}
+                          <div className="sm:hidden divide-y divide-slate-200 dark:divide-white/[0.06]">
                             {filteredAssets.length === 0 ? (
-                              <tr>
-                                <td
-                                  colSpan={8}
-                                  className="py-8 text-center text-xs text-slate-600 dark:text-slate-400"
-                                >
-                                  Nenhum ativo corresponde ao filtro selecionado.
-                                </td>
-                              </tr>
+                              <div className="py-8 px-4 text-center text-xs text-slate-600 dark:text-slate-400">
+                                Nenhum ativo corresponde ao filtro selecionado.
+                              </div>
                             ) : (
                               filteredAssets.map((asset) => {
                                 const snap = state.snapshots[asset.id];
@@ -2298,98 +2295,226 @@ export default function App() {
                                 const isSelected = selectedAsset?.id === asset.id;
 
                                 return (
-                                  <tr
+                                  <div
                                     key={asset.id}
                                     onClick={() => setSelectedCoinId(asset.id)}
-                                    className={`cursor-pointer transition-colors ${
+                                    className={`p-3.5 space-y-2.5 cursor-pointer transition-colors ${
                                       isSelected
                                         ? 'bg-sky-50 dark:bg-sky-500/[0.08]'
                                         : 'hover:bg-slate-50 dark:hover:bg-white/[0.025]'
                                     }`}
                                   >
-                                    <td className="py-3 px-5">
-                                      <div className="flex items-center gap-2.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2.5 min-w-0">
                                         <CryptoLogo
                                           symbol={asset.symbol}
                                           coinId={asset.id}
                                           name={asset.name}
                                           size="sm"
                                         />
-                                        <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 shrink-0">
-                                          {asset.symbol}
-                                        </span>
-                                        <span className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[120px]">
-                                          {asset.name}
-                                        </span>
+                                        <div className="min-w-0">
+                                          <div className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100">
+                                            {asset.symbol}
+                                          </div>
+                                          <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+                                            {asset.name}
+                                          </div>
+                                        </div>
                                       </div>
-                                    </td>
-                                    <td className="py-3 px-3 text-right font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
-                                      {snap
-                                        ? formatPrice(
-                                            snap.priceUsd,
-                                            state.settings.currency,
-                                            state.usdBrlRate
-                                          )
-                                        : '—'}
-                                    </td>
-                                    <td
-                                      className={`py-3 px-3 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap ${
-                                        (snap?.change24hPct ?? 0) >= 0
-                                          ? 'text-emerald-700 dark:text-emerald-400'
-                                          : 'text-rose-700 dark:text-rose-400'
-                                      }`}
-                                    >
-                                      {snap ? formatPercent(snap.change24hPct) : '—'}
-                                    </td>
-                                    <td className="py-3 px-3 hidden sm:table-cell">
-                                      <Sparkline
-                                        data={snap?.sparkline7d ?? []}
-                                        positive={(snap?.change7dPct ?? 0) >= 0}
-                                      />
-                                    </td>
-                                    <td className="py-3 px-3 text-right font-mono text-xs tabular-nums">
-                                      {snap ? (
-                                        <span
-                                          className={
-                                            snap.indicators.rsi14 <= 32
-                                              ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
-                                              : snap.indicators.rsi14 >= 68
-                                              ? 'text-rose-700 dark:text-rose-400 font-semibold'
-                                              : 'text-slate-700 dark:text-slate-300'
-                                          }
+
+                                      <div className="text-right font-mono tabular-nums shrink-0">
+                                        <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                                          {snap
+                                            ? formatPrice(
+                                                snap.priceUsd,
+                                                state.settings.currency,
+                                                state.usdBrlRate
+                                              )
+                                            : '—'}
+                                        </div>
+                                        <div
+                                          className={`text-[11px] font-medium ${
+                                            (snap?.change24hPct ?? 0) >= 0
+                                              ? 'text-emerald-700 dark:text-emerald-400'
+                                              : 'text-rose-700 dark:text-rose-400'
+                                          }`}
                                         >
-                                          {snap.indicators.rsi14.toFixed(1)}
-                                        </span>
-                                      ) : (
-                                        '—'
-                                      )}
-                                    </td>
-                                    <td className="py-3 px-3">
-                                      <SignalBadge action={analysis?.action} compact />
-                                    </td>
-                                    <td className="py-3 px-3 text-right font-mono text-xs text-slate-700 dark:text-slate-300 tabular-nums">
-                                      {analysis ? `${analysis.confidence}%` : '—'}
-                                    </td>
-                                    <td className="py-3 px-4 text-right">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          void handleRemoveAsset(asset.id);
-                                        }}
-                                        title={`Excluir ${asset.symbol} do painel`}
-                                        aria-label={`Excluir ${asset.symbol}`}
-                                        className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </td>
-                                  </tr>
+                                          {snap ? formatPercent(snap.change24hPct) : '—'} (24h)
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <SignalBadge
+                                          action={analysis?.action}
+                                          rsi14={snap?.indicators.rsi14}
+                                          change7dPct={snap?.change7dPct}
+                                          headline={analysis?.headline}
+                                          compact
+                                        />
+                                        {snap && (
+                                          <span className="text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                                            RSI {snap.indicators.rsi14.toFixed(1)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {analysis && (
+                                          <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                                            {analysis.confidence}%
+                                          </span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void handleRemoveAsset(asset.id);
+                                          }}
+                                          title={`Excluir ${asset.symbol} do painel`}
+                                          aria-label={`Excluir ${asset.symbol}`}
+                                          className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
                                 );
                               })
                             )}
-                          </tbody>
-                        </table>
+                          </div>
+
+                          {/* Tablet & desktop table (>= sm) */}
+                          <table className="hidden sm:table w-full text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-transparent text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                <th className="py-2.5 px-4 lg:px-5">Ativo</th>
+                                <th className="py-2.5 px-3 text-right">Preço</th>
+                                <th className="py-2.5 px-3 text-right">24h</th>
+                                <th className="py-2.5 px-3 hidden md:table-cell">7 dias</th>
+                                <th className="py-2.5 px-3 text-right">RSI (14)</th>
+                                <th className="py-2.5 px-3">Recomendação</th>
+                                <th className="py-2.5 px-3 text-right">Confiança</th>
+                                <th className="py-2.5 px-4 text-right">Excluir</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-sm">
+                              {filteredAssets.length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan={8}
+                                    className="py-8 text-center text-xs text-slate-600 dark:text-slate-400"
+                                  >
+                                    Nenhum ativo corresponde ao filtro selecionado.
+                                  </td>
+                                </tr>
+                              ) : (
+                                filteredAssets.map((asset) => {
+                                  const snap = state.snapshots[asset.id];
+                                  const analysis = state.analyses[asset.id];
+                                  const isSelected = selectedAsset?.id === asset.id;
+
+                                  return (
+                                    <tr
+                                      key={asset.id}
+                                      onClick={() => setSelectedCoinId(asset.id)}
+                                      className={`cursor-pointer transition-colors ${
+                                        isSelected
+                                          ? 'bg-sky-50 dark:bg-sky-500/[0.08]'
+                                          : 'hover:bg-slate-50 dark:hover:bg-white/[0.025]'
+                                      }`}
+                                    >
+                                      <td className="py-3 px-4 lg:px-5">
+                                        <div className="flex items-center gap-2.5">
+                                          <CryptoLogo
+                                            symbol={asset.symbol}
+                                            coinId={asset.id}
+                                            name={asset.name}
+                                            size="sm"
+                                          />
+                                          <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 shrink-0">
+                                            {asset.symbol}
+                                          </span>
+                                          <span className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[120px]">
+                                            {asset.name}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="py-3 px-3 text-right font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+                                        {snap
+                                          ? formatPrice(
+                                              snap.priceUsd,
+                                              state.settings.currency,
+                                              state.usdBrlRate
+                                            )
+                                          : '—'}
+                                      </td>
+                                      <td
+                                        className={`py-3 px-3 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap ${
+                                          (snap?.change24hPct ?? 0) >= 0
+                                            ? 'text-emerald-700 dark:text-emerald-400'
+                                            : 'text-rose-700 dark:text-rose-400'
+                                        }`}
+                                      >
+                                        {snap ? formatPercent(snap.change24hPct) : '—'}
+                                      </td>
+                                      <td className="py-3 px-3 hidden md:table-cell">
+                                        <Sparkline
+                                          data={snap?.sparkline7d ?? []}
+                                          positive={(snap?.change7dPct ?? 0) >= 0}
+                                        />
+                                      </td>
+                                      <td className="py-3 px-3 text-right font-mono text-xs tabular-nums">
+                                        {snap ? (
+                                          <span
+                                            className={
+                                              snap.indicators.rsi14 <= 32
+                                                ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
+                                                : snap.indicators.rsi14 >= 68
+                                                ? 'text-rose-700 dark:text-rose-400 font-semibold'
+                                                : 'text-slate-700 dark:text-slate-300'
+                                            }
+                                          >
+                                            {snap.indicators.rsi14.toFixed(1)}
+                                          </span>
+                                        ) : (
+                                          '—'
+                                        )}
+                                      </td>
+                                      <td className="py-3 px-3">
+                                        <SignalBadge
+                                          action={analysis?.action}
+                                          rsi14={snap?.indicators.rsi14}
+                                          change7dPct={snap?.change7dPct}
+                                          headline={analysis?.headline}
+                                          compact
+                                        />
+                                      </td>
+                                      <td className="py-3 px-3 text-right font-mono text-xs text-slate-700 dark:text-slate-300 tabular-nums">
+                                        {analysis ? `${analysis.confidence}%` : '—'}
+                                      </td>
+                                      <td className="py-3 px-4 text-right">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void handleRemoveAsset(asset.id);
+                                          }}
+                                          title={`Excluir ${asset.symbol} do painel`}
+                                          aria-label={`Excluir ${asset.symbol}`}
+                                          className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </>
                       )}
                     </div>
                   </section>
@@ -2484,7 +2609,13 @@ export default function App() {
                                   <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100">
                                     {alert.symbol}
                                   </span>
-                                  <SignalBadge action={alert.action} compact />
+                                  <SignalBadge
+                                    action={alert.action}
+                                    rsi14={state.snapshots[alert.coinId]?.indicators.rsi14}
+                                    change7dPct={state.snapshots[alert.coinId]?.change7dPct}
+                                    headline={alert.headline}
+                                    compact
+                                  />
                                 </div>
                                 <span className="text-[11px] font-mono text-slate-500 tabular-nums shrink-0">
                                   {formatRelativeTime(alert.createdAt)}
@@ -2663,84 +2794,91 @@ export default function App() {
                       </button>
                     </div>
                   ) : (
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-transparent text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                          <th className="py-3 px-5">Ativo</th>
-                          <th className="py-3 px-3 text-right">Preço</th>
-                          <th className="py-3 px-3 text-right">24h / 7d</th>
-                          <th className="py-3 px-3 text-right">Volume 24h</th>
-                          <th className="py-3 px-3 text-right">RSI (14)</th>
-                          <th className="py-3 px-3">Tendência EMA</th>
-                          <th className="py-3 px-3">Veredito IA</th>
-                          <th className="py-3 px-5 text-right">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-xs">
+                    <>
+                      {/* Mobile stacked cards (< sm) */}
+                      <div className="sm:hidden divide-y divide-slate-200 dark:divide-white/[0.06]">
                         {state.watchlist.map((asset) => {
                           const snap = state.snapshots[asset.id];
                           const analysis = state.analyses[asset.id];
                           return (
-                            <tr key={asset.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                              <td className="py-3.5 px-5">
-                                <div className="flex items-center gap-3">
+                            <div key={asset.id} className="p-4 space-y-3 text-xs">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2.5 min-w-0">
                                   <CryptoLogo
                                     symbol={asset.symbol}
                                     coinId={asset.id}
                                     name={asset.name}
                                     size="sm"
                                   />
-                                  <div>
+                                  <div className="min-w-0">
                                     <div className="font-mono font-bold text-slate-900 dark:text-slate-100">
                                       {asset.symbol}
                                     </div>
-                                    <div className="text-slate-600 dark:text-slate-400">{asset.name}</div>
+                                    <div className="text-slate-600 dark:text-slate-400 truncate">
+                                      {asset.name}
+                                    </div>
                                   </div>
                                 </div>
-                              </td>
-                              <td className="py-3.5 px-3 text-right font-mono font-semibold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
-                                {snap
-                                  ? formatPrice(
-                                      snap.priceUsd,
-                                      state.settings.currency,
-                                      state.usdBrlRate
-                                    )
-                                  : '—'}
-                              </td>
-                              <td className="py-3.5 px-3 text-right font-mono font-medium tabular-nums whitespace-nowrap">
-                                <div
-                                  className={
-                                    (snap?.change24hPct ?? 0) >= 0
-                                      ? 'text-emerald-700 dark:text-emerald-400'
-                                      : 'text-rose-700 dark:text-rose-400'
-                                  }
-                                >
-                                  {snap ? formatPercent(snap.change24hPct) : '—'}
+
+                                <div className="text-right font-mono tabular-nums shrink-0">
+                                  <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                    {snap
+                                      ? formatPrice(
+                                          snap.priceUsd,
+                                          state.settings.currency,
+                                          state.usdBrlRate
+                                        )
+                                      : '—'}
+                                  </div>
+                                  <div
+                                    className={`text-[11px] font-medium ${
+                                      (snap?.change24hPct ?? 0) >= 0
+                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                        : 'text-rose-700 dark:text-rose-400'
+                                    }`}
+                                  >
+                                    {snap ? formatPercent(snap.change24hPct) : '—'} · 7d{' '}
+                                    {snap ? formatPercent(snap.change7dPct) : '—'}
+                                  </div>
                                 </div>
-                                <div className="text-[11px] text-slate-500">
-                                  {snap ? formatPercent(snap.change7dPct) : '—'}
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 text-[11px] font-mono tabular-nums rounded-lg bg-slate-50 dark:bg-[#0B0F17] border border-slate-200/80 dark:border-white/[0.06] px-3 py-2">
+                                <div>
+                                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">Vol 24h</span>
+                                  <span className="text-slate-900 dark:text-slate-200">
+                                    {snap
+                                      ? formatCompactVolume(
+                                          snap.volume24hUsd,
+                                          state.settings.currency,
+                                          state.usdBrlRate
+                                        )
+                                      : '—'}
+                                  </span>
                                 </div>
-                              </td>
-                              <td className="py-3.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">
-                                {snap
-                                  ? formatCompactVolume(
-                                      snap.volume24hUsd,
-                                      state.settings.currency,
-                                      state.usdBrlRate
-                                    )
-                                  : '—'}
-                              </td>
-                              <td className="py-3.5 px-3 text-right font-mono text-slate-800 dark:text-slate-200 tabular-nums">
-                                {snap ? snap.indicators.rsi14.toFixed(1) : '—'}
-                              </td>
-                              <td className="py-3.5 px-3 capitalize text-slate-700 dark:text-slate-300">
-                                {snap?.indicators.emaTrend ?? '—'}
-                              </td>
-                              <td className="py-3.5 px-3">
-                                <SignalBadge action={analysis?.action} compact />
-                              </td>
-                              <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-2">
+                                <div>
+                                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">RSI (14)</span>
+                                  <span className="text-slate-900 dark:text-slate-200">
+                                    {snap ? snap.indicators.rsi14.toFixed(1) : '—'}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">EMA</span>
+                                  <span className="capitalize text-slate-900 dark:text-slate-200">
+                                    {snap?.indicators.emaTrend ?? '—'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <SignalBadge
+                                  action={analysis?.action}
+                                  rsi14={snap?.indicators.rsi14}
+                                  change7dPct={snap?.change7dPct}
+                                  headline={analysis?.headline}
+                                  compact
+                                />
+                                <div className="inline-flex items-center gap-1.5">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -2755,7 +2893,7 @@ export default function App() {
                                     type="button"
                                     disabled={state.isStudying}
                                     onClick={() => handleRunStudy(asset.id)}
-                                    className="px-2.5 py-1 rounded bg-sky-50 dark:bg-sky-600/20 border border-sky-300 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-600/30 text-sky-700 dark:text-sky-300 font-medium transition-colors disabled:opacity-50"
+                                    className="px-2.5 py-1 rounded bg-sky-50 dark:bg-sky-600/20 border border-sky-300 dark:border-sky-500/30 text-sky-700 dark:text-sky-300 font-medium disabled:opacity-50"
                                   >
                                     Estudar
                                   </button>
@@ -2764,17 +2902,137 @@ export default function App() {
                                     onClick={() => void handleRemoveAsset(asset.id)}
                                     title={`Excluir ${asset.symbol}`}
                                     aria-label={`Excluir ${asset.symbol}`}
-                                    className="p-1.5 rounded border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-500/30 transition-colors"
+                                    className="p-1.5 rounded border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-                              </td>
-                            </tr>
+                              </div>
+                            </div>
                           );
                         })}
-                      </tbody>
-                    </table>
+                      </div>
+
+                      {/* Tablet & desktop table (>= sm) */}
+                      <table className="hidden sm:table w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-transparent text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                            <th className="py-3 px-4 lg:px-5">Ativo</th>
+                            <th className="py-3 px-3 text-right">Preço</th>
+                            <th className="py-3 px-3 text-right">24h / 7d</th>
+                            <th className="py-3 px-3 text-right hidden md:table-cell">Volume 24h</th>
+                            <th className="py-3 px-3 text-right">RSI (14)</th>
+                            <th className="py-3 px-3 hidden lg:table-cell">Tendência EMA</th>
+                            <th className="py-3 px-3">Veredito IA</th>
+                            <th className="py-3 px-4 lg:px-5 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-xs">
+                          {state.watchlist.map((asset) => {
+                            const snap = state.snapshots[asset.id];
+                            const analysis = state.analyses[asset.id];
+                            return (
+                              <tr key={asset.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                                <td className="py-3.5 px-4 lg:px-5">
+                                  <div className="flex items-center gap-3">
+                                    <CryptoLogo
+                                      symbol={asset.symbol}
+                                      coinId={asset.id}
+                                      name={asset.name}
+                                      size="sm"
+                                    />
+                                    <div>
+                                      <div className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                                        {asset.symbol}
+                                      </div>
+                                      <div className="text-slate-600 dark:text-slate-400">{asset.name}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-3 text-right font-mono font-semibold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+                                  {snap
+                                    ? formatPrice(
+                                        snap.priceUsd,
+                                        state.settings.currency,
+                                        state.usdBrlRate
+                                      )
+                                    : '—'}
+                                </td>
+                                <td className="py-3.5 px-3 text-right font-mono font-medium tabular-nums whitespace-nowrap">
+                                  <div
+                                    className={
+                                      (snap?.change24hPct ?? 0) >= 0
+                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                        : 'text-rose-700 dark:text-rose-400'
+                                    }
+                                  >
+                                    {snap ? formatPercent(snap.change24hPct) : '—'}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500">
+                                    {snap ? formatPercent(snap.change7dPct) : '—'}
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300 tabular-nums hidden md:table-cell whitespace-nowrap">
+                                  {snap
+                                    ? formatCompactVolume(
+                                        snap.volume24hUsd,
+                                        state.settings.currency,
+                                        state.usdBrlRate
+                                      )
+                                    : '—'}
+                                </td>
+                                <td className="py-3.5 px-3 text-right font-mono text-slate-800 dark:text-slate-200 tabular-nums">
+                                  {snap ? snap.indicators.rsi14.toFixed(1) : '—'}
+                                </td>
+                                <td className="py-3.5 px-3 capitalize text-slate-700 dark:text-slate-300 hidden lg:table-cell">
+                                  {snap?.indicators.emaTrend ?? '—'}
+                                </td>
+                                <td className="py-3.5 px-3">
+                                  <SignalBadge
+                                    action={analysis?.action}
+                                    rsi14={snap?.indicators.rsi14}
+                                    change7dPct={snap?.change7dPct}
+                                    headline={analysis?.headline}
+                                    compact
+                                  />
+                                </td>
+                                <td className="py-3.5 px-4 lg:px-5 text-right whitespace-nowrap">
+                                  <div className="inline-flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedCoinId(asset.id);
+                                        setActiveTab('painel');
+                                      }}
+                                      className="px-2.5 py-1 rounded border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors"
+                                    >
+                                      Detalhes
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={state.isStudying}
+                                      onClick={() => handleRunStudy(asset.id)}
+                                      className="px-2.5 py-1 rounded bg-sky-50 dark:bg-sky-600/20 border border-sky-300 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-600/30 text-sky-700 dark:text-sky-300 font-medium transition-colors disabled:opacity-50"
+                                    >
+                                      Estudar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleRemoveAsset(asset.id)}
+                                      title={`Excluir ${asset.symbol}`}
+                                      aria-label={`Excluir ${asset.symbol}`}
+                                      className="p-1.5 rounded border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-500/30 transition-colors"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </>
                   )}
                 </div>
               </section>
@@ -3044,7 +3302,13 @@ export default function App() {
                                       {alert.symbol}
                                     </span>
                                     <span className="text-xs text-slate-600 dark:text-slate-400">{alert.name}</span>
-                                    <SignalBadge action={alert.action} compact />
+                                    <SignalBadge
+                                      action={alert.action}
+                                      rsi14={state.snapshots[alert.coinId]?.indicators.rsi14}
+                                      change7dPct={state.snapshots[alert.coinId]?.change7dPct}
+                                      headline={alert.headline}
+                                      compact
+                                    />
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <span className="text-xs font-mono text-slate-500 tabular-nums">

@@ -28,6 +28,7 @@ import {
   isTelegramConfigured,
   sendTelegramMessage,
 } from './telegram.ts';
+import { applyPortfolioProtectionPolicy } from '../src/utils/verdictPolicy.ts';
 
 function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -259,18 +260,18 @@ Contexto de autoavaliação global da IA até agora:
 
 ${portfolioOverviewText}
 
-Regras analíticas rigorosas:
-1. Baseie cada decisão estritamente na confluência técnica real dos números fornecidos (RSI 14, cruzamento EMA 9/21/50, MACD, posição nas Bandas de Bollinger %B, proximidade de suporte/resistência, momentum de volume e variação 1h/24h/7d).
-2. Integração com a Carteira ("userPortfolioPosition"):
-   - Se o usuário possui o ativo em carteira, considere seu Preço Médio (avgBuyPriceUsd), Lucro/Prejuízo atual (unrealizedPnlPct) e peso na carteira (allocationPct).
-   - Se o usuário estiver com lucro expressivo e RSI/Bollinger sobrecomprados, oriente realização parcial ou venda estratégica; se estiver no prejuízo abaixo do preço médio mas próximo ao suporte com RSI baixo, avalie se vale segurar ou fazer preço médio; se a concentração (allocationPct) passar de 40%, alerte sobre gestão de risco.
-   - Preencha o campo "portfolioAdvice" com uma recomendação prática e personalizada em PT-BR sobre o que o usuário deve fazer com a sua posição (ou como iniciar posição caso ainda não tenha esse ativo em carteira).
-3. Se RSI < 34 próximo ao suporte ou Bollinger %B < 18% com MACD virando positivo, avalie COMPRAR com stop abaixo do suporte.
-4. Se RSI > 68 próximo à resistência ou Bollinger %B > 88% com exaustão de momentum, avalie VENDER / realizar lucro.
-5. Se os indicadores estiverem mistos ou lateralizados (RSI 42-58, EMA lateral), recomende ESPERAR.
+Regras analíticas rigorosas de PROTEÇÃO AO PATRIMÔNIO (HODL e Carteira):
+1. NUNCA recomende "VENDER" durante quedas fortes, mercado sangrando, variação de 7 dias fortemente negativa ou quando o RSI indicar sobrevenda/pânico — isso faria o usuário vender no prejuízo!
+2. Em cenários de queda generalizada (change7dPct negativa ou queda forte 24h):
+   - Se o RSI(14) estiver abaixo de 40/45, recomende "COMPRAR" explicando no headline e no portfolioAdvice que é oportunidade de "COMPRAR (Preço Médio)" / "ACUMULAR" para baratear o preço médio.
+   - Se o mercado estiver apenas consolidando ou sem direção clara (RSI entre 45 e 70), recomende "ESPERAR" explicando no headline "ESPERAR / MANTER (HODL)".
+3. O veredito "VENDER" (ou Venda Parcial para realizar lucros) SÓ deve ser acionado estritamente quando o ativo estiver em forte tendência de alta prolongada (change7dPct positiva e EMA em alta) COM RSI(14) acima de 70 (sobrecomprado), garantindo realização de lucro (nunca venda no prejuízo se userPortfolioPosition tiver unrealizedPnlPct <= 0).
+4. Baseie cada decisão na confluência técnica real dos números fornecidos (RSI 14, cruzamento EMA 9/21/50, MACD, Bandas de Bollinger %B, suporte/resistência e variação 1h/24h/7d).
+5. Integração com a Carteira ("userPortfolioPosition"):
+   - Considere o Preço Médio (avgBuyPriceUsd), Lucro/Prejuízo atual (unrealizedPnlPct) e peso na carteira (allocationPct).
+   - Preencha "portfolioAdvice" com recomendação prática em PT-BR (HODL, Preço Médio ou Venda Parcial apenas com lucro e RSI > 70).
 6. Em "selfLearningNote", compare o sinal anterior com o movimento real desde o último estudo.
-7. Escreva tudo em Português do Brasil (PT-BR) claro e objetivo.
-8. Garanta entryZoneLowUsd <= entryZoneHighUsd.
+7. Escreva tudo em Português do Brasil (PT-BR) claro e objetivo e garanta entryZoneLowUsd <= entryZoneHighUsd.
 
 Dados de mercado e posição na carteira:
 ${JSON.stringify(contextPayload, null, 2)}
@@ -387,10 +388,21 @@ ${JSON.stringify(contextPayload, null, 2)}
       const snap = snapshots[item.coinId];
       if (!snap) continue;
 
-      const normalizedAction: SignalAction =
+      const rawAction: SignalAction =
         item.action === 'COMPRAR' || item.action === 'VENDER' || item.action === 'ESPERAR'
           ? item.action
           : 'ESPERAR';
+
+      const holding = holdingsByCoin.get(item.coinId);
+      const protectedVerdict = applyPortfolioProtectionPolicy({
+        rawAction,
+        snap,
+        holding,
+        headline: String(item.headline || ''),
+        thesis: String(item.thesis || ''),
+        portfolioAdvice: String(item.portfolioAdvice || ''),
+      });
+      const normalizedAction = protectedVerdict.action;
 
       const normalizedHorizon =
         item.horizon === 'curto_prazo' || item.horizon === 'medio_prazo' || item.horizon === 'swing'
@@ -413,9 +425,9 @@ ${JSON.stringify(contextPayload, null, 2)}
         targetPriceUsd: Number(item.targetPriceUsd) || snap.priceUsd * 1.05,
         stopLossUsd: Number(item.stopLossUsd) || snap.priceUsd * 0.96,
         riskLevel: normalizedRisk,
-        headline: String(item.headline || `${snap.symbol}: ${normalizedAction}`),
-        thesis: String(item.thesis || ''),
-        portfolioAdvice: String(item.portfolioAdvice || ''),
+        headline: protectedVerdict.headline || `${snap.symbol}: ${normalizedAction}`,
+        thesis: protectedVerdict.thesis,
+        portfolioAdvice: protectedVerdict.portfolioAdvice,
         technicalFactors: Array.isArray(item.technicalFactors)
           ? item.technicalFactors.slice(0, 4).map(String)
           : [],

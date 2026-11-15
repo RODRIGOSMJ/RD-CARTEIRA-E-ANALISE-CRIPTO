@@ -37,6 +37,7 @@ import {
   saveTelegramCache,
   saveWhatsAppCache,
 } from '../utils/alertChannelStorage.ts';
+import { applyPortfolioProtectionPolicy } from '../utils/verdictPolicy.ts';
 
 export class BackendUnavailableError extends Error {
   constructor(message = 'Servidor de API indisponível neste ambiente') {
@@ -1003,27 +1004,75 @@ function analyzeAssetLocally(
 ): AIAnalysisResult {
   const ind = snap.indicators;
   const price = snap.priceUsd || 1;
+  const chg7d = snap.change7dPct ?? 0;
   let score = 0;
 
-  if (ind.rsi14 <= 32) score += 2;
-  else if (ind.rsi14 <= 44) score += 1;
-  else if (ind.rsi14 >= 68) score -= 2;
-  else if (ind.rsi14 >= 60) score -= 1;
+  if (ind.rsi14 <= 35) score += 2.2;
+  else if (ind.rsi14 <= 45) score += 1.2;
+  else if (ind.rsi14 > 70) score -= 2.2;
 
-  if (ind.emaTrend === 'alta') score += 1.5;
-  else if (ind.emaTrend === 'baixa') score -= 1.5;
+  if (ind.emaTrend === 'alta' && chg7d > 3) score += 1.5;
+  else if (ind.emaTrend === 'alta') score += 0.75;
 
   if (ind.macdTrend === 'bullish') score += 1;
-  else if (ind.macdTrend === 'bearish') score -= 1;
 
-  if (ind.bollingerPercentB <= 22) score += 1;
-  else if (ind.bollingerPercentB >= 82) score -= 1;
+  if (ind.bollingerPercentB <= 25) score += 1;
+  else if (ind.bollingerPercentB >= 88 && ind.rsi14 > 70) score -= 1;
 
-  let action: SignalAction = 'ESPERAR';
-  if (score >= 1.5) action = 'COMPRAR';
-  else if (score <= -1.5) action = 'VENDER';
+  let rawAction: SignalAction = 'ESPERAR';
+  if (score >= 1.5) rawAction = 'COMPRAR';
+  else if (ind.rsi14 > 70 && ind.emaTrend === 'alta' && chg7d > 3 && score <= -1.0) {
+    rawAction = 'VENDER';
+  }
 
-  const confidence = Math.min(92, Math.max(54, Math.round(58 + Math.abs(score) * 7.5)));
+  const rawHeadline =
+    rawAction === 'COMPRAR'
+      ? `${asset.symbol} em região favorável de acumulação / preço médio`
+      : rawAction === 'VENDER'
+      ? `${asset.symbol} em forte alta sobrecomprada (RSI ${ind.rsi14.toFixed(1)}) — venda parcial`
+      : `${asset.symbol} em consolidação — manter posição (HODL)`;
+
+  const rawThesis = `Leitura quantitativa ao vivo indica variação de 7d em ${chg7d.toFixed(
+    1
+  )}%, RSI(14) em ${ind.rsi14.toFixed(1)}, tendência EMA de ${ind.emaTrend} e MACD ${
+    ind.macdTrend === 'bullish'
+      ? 'positivo'
+      : ind.macdTrend === 'bearish'
+      ? 'negativo'
+      : 'neutro'
+  }, com banda de Bollinger em ${ind.bollingerPercentB.toFixed(0)}%.`;
+
+  let rawPortfolioAdvice =
+    'Você ainda não possui posição aberta neste ativo. Considere aportes fracionados apenas em zonas de suporte ou sobrevenda.';
+  if (holding && holding.quantity > 0) {
+    if (holding.unrealizedPnlPct >= 8 && rawAction === 'VENDER') {
+      rawPortfolioAdvice = `Sua posição tem lucro de ${holding.unrealizedPnlPct.toFixed(
+        1
+      )}% sobre o preço médio com RSI acima de 70. Momento favorável para realizar lucro parcial e proteger ganhos.`;
+    } else if (ind.rsi14 <= 45) {
+      rawPortfolioAdvice = `RSI em ${ind.rsi14.toFixed(1)} (${holding.unrealizedPnlPct.toFixed(
+        1
+      )}% vs preço médio). Política HODL bloqueia venda na baixa e favorece acumulação gradual para reduzir o preço médio.`;
+    } else {
+      rawPortfolioAdvice = `Você detém ${holding.quantity.toLocaleString('pt-BR', {
+        maximumFractionDigits: 6,
+      })} ${holding.symbol} (${holding.unrealizedPnlPct >= 0 ? '+' : ''}${holding.unrealizedPnlPct.toFixed(
+        1
+      )}%). Mantenha a posição (HODL) e evite realizar prejuízo durante oscilações.`;
+    }
+  }
+
+  const protectedVerdict = applyPortfolioProtectionPolicy({
+    rawAction,
+    snap,
+    holding,
+    headline: rawHeadline,
+    thesis: rawThesis,
+    portfolioAdvice: rawPortfolioAdvice,
+  });
+
+  const action = protectedVerdict.action;
+  const confidence = Math.min(92, Math.max(56, Math.round(60 + Math.abs(score) * 7)));
   const entryLow = Math.min(price * 0.992, Math.max(ind.supportLevel, price * 0.96));
   const entryHigh = Math.max(entryLow, price * 1.005);
   const targetPriceUsd =
@@ -1033,26 +1082,6 @@ function analyzeAssetLocally(
   const stopLossUsd =
     action === 'VENDER' ? price * 1.035 : Math.min(price * 0.955, ind.supportLevel * 0.985);
 
-  let portfolioAdvice =
-    'Você ainda não possui posição aberta neste ativo. Considere aguardar confirmação na zona de entrada.';
-  if (holding && holding.quantity > 0) {
-    if (holding.unrealizedPnlPct >= 8 && action === 'VENDER') {
-      portfolioAdvice = `Sua posição tem lucro de ${holding.unrealizedPnlPct.toFixed(
-        1
-      )}% sobre o preço médio. Momento favorável para realizar lucro parcial e proteger ganhos.`;
-    } else if (holding.unrealizedPnlPct < -5 && action === 'COMPRAR') {
-      portfolioAdvice = `Ativo abaixo do seu preço médio (${holding.unrealizedPnlPct.toFixed(
-        1
-      )}%) com RSI em ${ind.rsi14.toFixed(1)}. Possível região técnica para redução de preço médio com controle de risco.`;
-    } else {
-      portfolioAdvice = `Você detém ${holding.quantity.toLocaleString('pt-BR', {
-        maximumFractionDigits: 6,
-      })} ${holding.symbol} (${holding.unrealizedPnlPct >= 0 ? '+' : ''}${holding.unrealizedPnlPct.toFixed(
-        1
-      )}%). ${action === 'ESPERAR' ? 'Mantenha a posição e acompanhe suporte/resistência.' : 'Ajuste alvos conforme sua gestão de risco.'}`;
-    }
-  }
-
   return {
     coinId: asset.id,
     symbol: asset.symbol,
@@ -1060,37 +1089,24 @@ function analyzeAssetLocally(
     confidence,
     horizon: 'curto_prazo',
     riskLevel: ind.volatilityPct > 3.5 ? 'elevado' : ind.volatilityPct < 1.5 ? 'baixo' : 'moderado',
-    headline:
-      action === 'COMPRAR'
-        ? `${asset.symbol} mostra força compradora perto de suporte técnico`
-        : action === 'VENDER'
-        ? `${asset.symbol} sinaliza sobrecompra ou perda de tendência`
-        : `${asset.symbol} em consolidação — aguardar definição de direção`,
-    thesis: `Leitura quantitativa ao vivo indica RSI(14) em ${ind.rsi14.toFixed(
-      1
-    )}, tendência EMA de ${ind.emaTrend} e MACD ${
-      ind.macdTrend === 'bullish'
-        ? 'positivo'
-        : ind.macdTrend === 'bearish'
-        ? 'negativo'
-        : 'neutro'
-    }, com banda de Bollinger em ${ind.bollingerPercentB.toFixed(0)}%.`,
+    headline: protectedVerdict.headline,
+    thesis: protectedVerdict.thesis,
     entryZoneLowUsd: entryLow,
     entryZoneHighUsd: entryHigh,
     targetPriceUsd,
     stopLossUsd,
     technicalFactors: [
       `RSI (14) medido em ${ind.rsi14.toFixed(1)}`,
-      `Tendência EMA9/EMA21 classificada como ${ind.emaTrend}`,
+      `Tendência EMA9/EMA21 classificada como ${ind.emaTrend} (7d: ${chg7d.toFixed(2)}%)`,
       `Bollinger %B em ${ind.bollingerPercentB.toFixed(1)}% com volatilidade de ${ind.volatilityPct.toFixed(2)}%`,
     ],
     riskFactors: [
-      `Perda do suporte em US$ ${ind.supportLevel.toFixed(4)} invalida cenário altista`,
+      `Perda do suporte em US$ ${ind.supportLevel.toFixed(4)} requer gestão de aportes graduais`,
       `Mudanças bruscas de liquidez no Bitcoin podem impactar ${asset.symbol}`,
     ],
     selfLearningNote:
-      'Análise quantitativa contínua executada com métricas técnicas em tempo real.',
-    portfolioAdvice,
+      'Análise quantitativa contínua executada com política HODL de proteção ao patrimônio (vendas bloqueadas em quedas/sobrevenda).',
+    portfolioAdvice: protectedVerdict.portfolioAdvice,
     analyzedAt: new Date().toISOString(),
     priceAtAnalysisUsd: price,
     cycleId,
