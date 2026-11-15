@@ -10,14 +10,17 @@ import {
   ExternalLink,
   Loader2,
   LogOut,
+  Moon,
   Plus,
   Search,
   Sparkles,
+  Sun,
   Trash2,
   Wallet,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from './hooks/useTheme.ts';
 import { AddAssetModal } from './components/AddAssetModal.tsx';
 import { AddTransactionModal } from './components/AddTransactionModal.tsx';
 import { AddTriggerModal } from './components/AddTriggerModal.tsx';
@@ -122,6 +125,7 @@ import { playAlertChime, sendBrowserNotification } from './utils/notify.ts';
 type NavTab = 'painel' | 'carteira' | 'ativos' | 'autoestudo' | 'alertas';
 
 export default function App() {
+  const { isDark, toggleTheme } = useTheme();
   const [localState, setLocalState] = useState<AppStatePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1346,42 +1350,42 @@ export default function App() {
   const renderOutcomeText = (alert: SignalAlert) => {
     if (alert.outcome === 'acerto') {
       return (
-        <span className="text-emerald-400 font-mono tabular-nums">
+        <span className="text-emerald-700 dark:text-emerald-400 font-mono tabular-nums">
           Acerto ({formatPercent(alert.evaluatedReturnPct)})
         </span>
       );
     }
     if (alert.outcome === 'erro') {
       return (
-        <span className="text-rose-400 font-mono tabular-nums">
+        <span className="text-rose-700 dark:text-rose-400 font-mono tabular-nums">
           Desvio ({formatPercent(alert.evaluatedReturnPct)})
         </span>
       );
     }
     if (alert.outcome === 'neutro') {
       return (
-        <span className="text-slate-400 font-mono tabular-nums">
+        <span className="text-slate-600 dark:text-slate-400 font-mono tabular-nums">
           Lateral ({formatPercent(alert.evaluatedReturnPct)})
         </span>
       );
     }
     return (
-      <span className="text-sky-400 font-mono tabular-nums">
+      <span className="text-sky-700 dark:text-sky-400 font-mono tabular-nums">
         Aberto ({formatPercent(alert.evaluatedReturnPct ?? 0)})
       </span>
     );
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0B0F17] text-slate-100">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-[#0B0F17] dark:text-slate-100 transition-colors">
       {/* Top Bar Contract: 3 zones separated by gap-8 */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0B0F17]/95 backdrop-blur-md">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
+      <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-white/[0.08] bg-white/95 dark:bg-[#0B0F17]/95 backdrop-blur-md">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
           {/* Zone 1: Single-line brand wordmark */}
           <button
             type="button"
             onClick={() => setActiveTab('painel')}
-            className="text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
+            className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
           >
             SinalCripto IA
           </button>
@@ -1407,8 +1411,8 @@ export default function App() {
                 onClick={() => setActiveTab(item.id)}
                 className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
                   activeTab === item.id
-                    ? 'text-slate-100 border-sky-500'
-                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                    ? 'text-slate-900 dark:text-slate-100 border-sky-600 dark:border-sky-500 font-semibold'
+                    : 'text-slate-600 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 {item.label}
@@ -1416,7 +1420,7 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Zone 3: Tiny cloud sync icon + 1 primary CTA button */}
+          {/* Zone 3: Tiny cloud sync icon + Theme toggle + PWA Install + 1 primary CTA button */}
           <div className="flex items-center gap-2 shrink-0">
             {authReady && (
               <div className="relative" ref={cloudMenuRef}>
@@ -1442,8 +1446,8 @@ export default function App() {
                   }
                   className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
                     cloudUser
-                      ? 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400'
-                      : 'border-white/10 bg-[#111827] hover:bg-slate-800 text-sky-400 hover:text-sky-300'
+                      ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                      : 'border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300'
                   }`}
                 >
                   {authBusy ? (
@@ -1456,33 +1460,33 @@ export default function App() {
                 </button>
 
                 {cloudUser && cloudMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 bg-[#111827] shadow-2xl p-3 space-y-2.5 z-50">
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl p-3 space-y-2.5 z-50">
                     <div className="space-y-0.5">
-                      <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
                         <CloudCheck className="w-3.5 h-3.5 shrink-0" />
                         Nuvem sincronizada
                       </p>
                       {cloudUser.email && (
-                        <p className="text-[11px] font-mono text-slate-300 truncate">
+                        <p className="text-[11px] font-mono text-slate-700 dark:text-slate-300 truncate">
                           {cloudUser.email}
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 pt-1 border-t border-white/[0.08]">
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-200 dark:border-white/[0.08]">
                       <button
                         type="button"
                         disabled={authBusy}
                         onClick={() => void handleGoogleSignIn()}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-200 transition-colors disabled:opacity-50"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors disabled:opacity-50"
                       >
-                        <Cloud className="w-3 h-3 text-sky-400" />
+                        <Cloud className="w-3 h-3 text-sky-600 dark:text-sky-400" />
                         Trocar conta
                       </button>
                       <button
                         type="button"
                         disabled={authBusy}
                         onClick={() => void handleGoogleSignOut()}
-                        className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border border-white/10 hover:bg-rose-500/15 hover:text-rose-300 text-slate-300 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border border-slate-300 dark:border-white/10 hover:bg-rose-50 dark:hover:bg-rose-500/15 hover:text-rose-700 dark:hover:text-rose-300 text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50"
                       >
                         <LogOut className="w-3 h-3" />
                         Sair
@@ -1492,6 +1496,17 @@ export default function App() {
                 )}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={isDark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
+              aria-label={isDark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
+              aria-pressed={!isDark}
+              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-amber-300 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
 
             <PWAInstallButton />
 
@@ -1508,7 +1523,7 @@ export default function App() {
                   : 'Executar estudo completo agora'
               }
               onClick={() => handleRunStudy()}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-xs"
             >
               {state?.isStudying ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1522,7 +1537,7 @@ export default function App() {
       </header>
 
       {/* Mobile secondary nav */}
-      <div className="md:hidden border-b border-white/[0.07] bg-[#0F1520] px-4 py-2 flex items-center gap-4 overflow-x-auto text-xs font-medium">
+      <div className="md:hidden border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0F1520] px-4 py-2 flex items-center gap-4 overflow-x-auto text-xs font-medium">
         {(
           [
             { id: 'painel', label: 'Painel' },
@@ -1541,8 +1556,8 @@ export default function App() {
             onClick={() => setActiveTab(item.id)}
             className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 ${
               activeTab === item.id
-                ? 'text-slate-100 border-sky-500'
-                : 'text-slate-400 border-transparent'
+                ? 'text-slate-900 dark:text-slate-100 border-sky-600 dark:border-sky-500 font-semibold'
+                : 'text-slate-600 dark:text-slate-400 border-transparent'
             }`}
           >
             {item.label}
@@ -1554,10 +1569,10 @@ export default function App() {
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Live Automatic Signal Alert Banner */}
         {liveBannerAlerts.length > 0 && (
-          <div className="rounded-xl border border-sky-500/30 bg-[#111827] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="rounded-xl border border-sky-300 dark:border-sky-500/30 bg-white dark:bg-[#111827] shadow-xs dark:shadow-none px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <Bell className="w-4 h-4 text-sky-400 shrink-0" />
-              <span className="text-xs font-semibold text-slate-100">
+              <Bell className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
                 Novas sugestões automáticas geradas pela IA:
               </span>
               <div className="flex flex-wrap items-center gap-3">
@@ -1569,7 +1584,7 @@ export default function App() {
                       setSelectedCoinId(al.coinId);
                       setActiveTab('painel');
                     }}
-                    className="inline-flex items-center gap-2 text-xs text-slate-200 hover:text-white underline-offset-4 hover:underline"
+                    className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white underline-offset-4 hover:underline"
                   >
                     <CryptoLogo
                       symbol={al.symbol}
@@ -1586,7 +1601,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setLiveBannerAlerts([])}
-              className="p-1 text-slate-400 hover:text-slate-200"
+              className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               aria-label="Dispensar aviso"
             >
               <X className="w-4 h-4" />
@@ -1596,12 +1611,12 @@ export default function App() {
 
         {/* Error banner */}
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 flex items-center justify-between gap-3 text-xs text-rose-200">
+          <div className="rounded-xl border border-rose-300 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 flex items-center justify-between gap-3 text-xs text-rose-800 dark:text-rose-200">
             <span>{error}</span>
             <button
               type="button"
               onClick={() => setError(null)}
-              className="text-rose-300 hover:text-white"
+              className="font-medium text-rose-700 dark:text-rose-300 hover:text-rose-950 dark:hover:text-white"
             >
               Fechar
             </button>
@@ -1611,10 +1626,10 @@ export default function App() {
         {/* Workspace Context Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100 text-balance">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 text-balance">
               Inteligência Autônoma de Criptomoedas
             </h1>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
               <span>
                 {streamConnected ? 'Tempo real ativo (10s)' : 'Sincronizando mercado'}
               </span>
@@ -1625,7 +1640,7 @@ export default function App() {
               {studyStatusMsg && (
                 <>
                   <span aria-hidden="true">·</span>
-                  <span className="text-sky-400">{studyStatusMsg}</span>
+                  <span className="text-sky-700 dark:text-sky-400 font-medium">{studyStatusMsg}</span>
                 </>
               )}
             </div>
@@ -1633,7 +1648,7 @@ export default function App() {
 
           {state && (
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center gap-1 rounded-lg bg-[#111827] p-1 border border-white/[0.08]">
+              <div className="flex items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-300 dark:border-white/[0.08] shadow-xs dark:shadow-none">
                 {(['BRL', 'USD'] as const).map((curr) => (
                   <button
                     key={curr}
@@ -1642,7 +1657,7 @@ export default function App() {
                     className={`px-2.5 py-1 text-xs font-mono font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
                       state.settings.currency === curr
                         ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     {curr}
@@ -1653,7 +1668,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setAddModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-white/10 bg-[#111827] hover:bg-slate-800 text-slate-100 transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition-colors whitespace-nowrap shrink-0 shadow-xs dark:shadow-none"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Adicionar cripto
@@ -1664,15 +1679,15 @@ export default function App() {
 
         {/* Domain authorization helper (only shown if Firebase Auth rejects an unauthorized domain) */}
         {authReady && !cloudUser && unauthorizedDomain !== null && (
-          <section className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-4 space-y-2.5 text-xs">
+          <section className="rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/[0.08] p-4 space-y-2.5 text-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1 min-w-0">
-                <p className="font-semibold text-amber-200">
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
                   Autorize este domínio publicado no Firebase para liberar o login Google
                 </p>
-                <p className="text-[11px] text-slate-300">
+                <p className="text-[11px] text-slate-700 dark:text-slate-300">
                   Por segurança, o Firebase Authentication bloqueia o login em endereços novos até que você adicione o domínio no projeto{' '}
-                  <span className="font-mono text-amber-200">{firebaseProjectId}</span>.
+                  <span className="font-mono font-semibold text-amber-900 dark:text-amber-200">{firebaseProjectId}</span>.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1680,7 +1695,7 @@ export default function App() {
                   href={firebaseAuthDomainsSettingsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-400/30 transition-colors whitespace-nowrap"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Abrir domínios autorizados
@@ -1688,7 +1703,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setUnauthorizedDomain(null)}
-                  className="p-1.5 text-amber-200/70 hover:text-amber-100 rounded-md"
+                  className="p-1.5 text-amber-700 dark:text-amber-200/70 hover:text-amber-950 dark:hover:text-amber-100 rounded-md"
                   aria-label="Fechar aviso"
                 >
                   <X className="w-4 h-4" />
@@ -1697,19 +1712,19 @@ export default function App() {
             </div>
 
             {unauthorizedDomain && (
-              <div className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-[#0B0F17] px-3 py-2">
-                <span className="text-[11px] text-slate-400">Domínio detectado:</span>
-                <code className="text-[11px] font-mono text-sky-300 break-all flex-1">
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] px-3 py-2">
+                <span className="text-[11px] text-slate-600 dark:text-slate-400">Domínio detectado:</span>
+                <code className="text-[11px] font-mono text-sky-700 dark:text-sky-300 break-all flex-1">
                   {unauthorizedDomain}
                 </code>
                 <button
                   type="button"
                   onClick={() => void handleCopyDomain()}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/10 bg-[#111827] hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors whitespace-nowrap shrink-0"
                 >
                   {copiedDomain ? (
                     <>
-                      <Check className="w-3 h-3 text-emerald-400" />
+                      <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                       Copiado
                     </>
                   ) : (
@@ -1722,16 +1737,16 @@ export default function App() {
               </div>
             )}
 
-            <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
+            <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-700 dark:text-slate-300">
               <li>
-                Clique em <strong className="text-slate-100">Abrir domínios autorizados</strong> e vá em{' '}
-                <span className="font-mono text-slate-200">Authentication &gt; Settings &gt; Authorized domains</span>.
+                Clique em <strong className="text-slate-900 dark:text-slate-100">Abrir domínios autorizados</strong> e vá em{' '}
+                <span className="font-mono text-slate-800 dark:text-slate-200">Authentication &gt; Settings &gt; Authorized domains</span>.
               </li>
               <li>
-                Clique em <strong className="text-slate-100">Add domain</strong> e cole o domínio copiado acima.
+                Clique em <strong className="text-slate-900 dark:text-slate-100">Add domain</strong> e cole o domínio copiado acima.
               </li>
               <li>
-                Volte aqui e clique novamente no <strong className="text-slate-100">ícone da nuvem</strong> no topo.
+                Volte aqui e clique novamente no <strong className="text-slate-900 dark:text-slate-100">ícone da nuvem</strong> no topo.
               </li>
             </ol>
           </section>
@@ -1744,35 +1759,35 @@ export default function App() {
               {[0, 1, 2, 3].map((idx) => (
                 <div
                   key={idx}
-                  className="h-24 rounded-xl border border-white/[0.07] bg-[#111827] animate-pulse"
+                  className="h-24 rounded-xl border border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#111827] animate-pulse"
                 />
               ))}
             </div>
-            <div className="h-96 rounded-xl border border-white/[0.07] bg-[#111827] animate-pulse" />
+            <div className="h-96 rounded-xl border border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#111827] animate-pulse" />
           </div>
         ) : state ? (
           <>
             {/* 4-column Summary KPI Strip */}
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-4">
-                <span className="block text-xs text-slate-400">Ativos monitorados</span>
+              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Ativos monitorados</span>
                 <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-slate-100 tabular-nums">
+                  <span className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                     {state.watchlist.length}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono tabular-nums">
+                  <span className="text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                     {counts.hold} em espera
                   </span>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-4">
-                <span className="block text-xs text-slate-400">Sinais de compra</span>
+              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Sinais de compra</span>
                 <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-emerald-400 tabular-nums">
+                  <span className="text-2xl font-mono font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
                     {counts.buy}
                   </span>
-                  <span className="text-xs text-slate-400 truncate">
+                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
                     {state.watchlist
                       .filter((w) => state.analyses[w.id]?.action === 'COMPRAR')
                       .map((w) => w.symbol)
@@ -1782,13 +1797,13 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-4">
-                <span className="block text-xs text-slate-400">Sinais de venda</span>
+              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Sinais de venda</span>
                 <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-rose-400 tabular-nums">
+                  <span className="text-2xl font-mono font-bold text-rose-700 dark:text-rose-400 tabular-nums">
                     {counts.sell}
                   </span>
-                  <span className="text-xs text-slate-400 truncate">
+                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
                     {state.watchlist
                       .filter((w) => state.analyses[w.id]?.action === 'VENDER')
                       .map((w) => w.symbol)
@@ -1798,17 +1813,17 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-4">
-                <span className="block text-xs text-slate-400">
+              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                <span className="block text-xs text-slate-600 dark:text-slate-400">
                   Precisão avaliada pela IA
                 </span>
                 <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-slate-100 tabular-nums">
+                  <span className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                     {state.accuracyStats.accuracyPct !== null
                       ? `${state.accuracyStats.accuracyPct}%`
                       : 'Inicial'}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono tabular-nums">
+                  <span className="text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                     {state.accuracyStats.totalEvaluated > 0
                       ? `${state.accuracyStats.hits}/${state.accuracyStats.totalEvaluated} sinais`
                       : `${state.studyHistory.length} ciclos`}
@@ -1822,9 +1837,9 @@ export default function App() {
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
                 {/* Left 8 columns: Watchlist table + Selected Asset Detail */}
                 <div className="xl:col-span-8 space-y-6">
-                  <section className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.07]">
+                  <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
                         {(
                           [
                             { id: 'TODOS', label: 'Todos' },
@@ -1839,8 +1854,8 @@ export default function App() {
                             onClick={() => setSignalFilter(tab.id)}
                             className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
                               signalFilter === tab.id
-                                ? 'bg-slate-800 text-slate-100'
-                                : 'text-slate-400 hover:text-slate-200'
+                                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs dark:shadow-none'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                             }`}
                           >
                             {tab.label}
@@ -1849,13 +1864,13 @@ export default function App() {
                       </div>
 
                       <div className="relative min-w-[200px] flex-1 sm:flex-initial">
-                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <input
                           type="text"
                           value={tableSearch}
                           onChange={(e) => setTableSearch(e.target.value)}
                           placeholder="Filtrar moeda..."
-                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
                         />
                       </div>
                     </div>
@@ -1863,12 +1878,12 @@ export default function App() {
                     <div className="overflow-x-auto">
                       {state.watchlist.length === 0 ? (
                         <div className="p-10 text-center space-y-4">
-                          <BrainCircuit className="w-8 h-8 text-sky-400 mx-auto" />
+                          <BrainCircuit className="w-8 h-8 text-sky-600 dark:text-sky-400 mx-auto" />
                           <div className="max-w-md mx-auto space-y-1.5">
-                            <h2 className="text-base font-semibold text-slate-100">
+                            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                               Nenhum ativo cadastrado ainda
                             </h2>
-                            <p className="text-xs text-slate-400 leading-relaxed">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                               Adicione suas próprias criptomoedas oficiais ou lance sua carteira para a IA começar a monitorar indicadores e enviar sinais automáticos.
                             </p>
                           </div>
@@ -1876,7 +1891,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => setAddModalOpen(true)}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors"
+                              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Adicionar meu primeiro ativo
@@ -1884,7 +1899,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => openTransactionModal()}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors"
+                              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors"
                             >
                               <Wallet className="w-3.5 h-3.5" />
                               Lançar na carteira
@@ -1894,7 +1909,7 @@ export default function App() {
                       ) : (
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="border-b border-white/[0.06] text-[11px] font-medium text-slate-400">
+                            <tr className="border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-transparent text-[11px] font-medium text-slate-600 dark:text-slate-400">
                               <th className="py-2.5 px-5">Ativo</th>
                               <th className="py-2.5 px-3 text-right">Preço</th>
                               <th className="py-2.5 px-3 text-right">24h</th>
@@ -1905,12 +1920,12 @@ export default function App() {
                               <th className="py-2.5 px-4 text-right">Excluir</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-white/[0.05] text-sm">
+                          <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-sm">
                             {filteredAssets.length === 0 ? (
                               <tr>
                                 <td
                                   colSpan={8}
-                                  className="py-8 text-center text-xs text-slate-400"
+                                  className="py-8 text-center text-xs text-slate-600 dark:text-slate-400"
                                 >
                                   Nenhum ativo corresponde ao filtro selecionado.
                                 </td>
@@ -1927,8 +1942,8 @@ export default function App() {
                                     onClick={() => setSelectedCoinId(asset.id)}
                                     className={`cursor-pointer transition-colors ${
                                       isSelected
-                                        ? 'bg-sky-500/[0.08]'
-                                        : 'hover:bg-white/[0.025]'
+                                        ? 'bg-sky-50 dark:bg-sky-500/[0.08]'
+                                        : 'hover:bg-slate-50 dark:hover:bg-white/[0.025]'
                                     }`}
                                   >
                                     <td className="py-3 px-5">
@@ -1939,15 +1954,15 @@ export default function App() {
                                           name={asset.name}
                                           size="sm"
                                         />
-                                        <span className="font-mono font-bold text-xs text-slate-100 shrink-0">
+                                        <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 shrink-0">
                                           {asset.symbol}
                                         </span>
-                                        <span className="text-xs text-slate-300 truncate max-w-[120px]">
+                                        <span className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[120px]">
                                           {asset.name}
                                         </span>
                                       </div>
                                     </td>
-                                    <td className="py-3 px-3 text-right font-mono text-xs font-semibold text-slate-100 tabular-nums whitespace-nowrap">
+                                    <td className="py-3 px-3 text-right font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
                                       {snap
                                         ? formatPrice(
                                             snap.priceUsd,
@@ -1957,10 +1972,10 @@ export default function App() {
                                         : '—'}
                                     </td>
                                     <td
-                                      className={`py-3 px-3 text-right font-mono text-xs tabular-nums whitespace-nowrap ${
+                                      className={`py-3 px-3 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap ${
                                         (snap?.change24hPct ?? 0) >= 0
-                                          ? 'text-emerald-400'
-                                          : 'text-rose-400'
+                                          ? 'text-emerald-700 dark:text-emerald-400'
+                                          : 'text-rose-700 dark:text-rose-400'
                                       }`}
                                     >
                                       {snap ? formatPercent(snap.change24hPct) : '—'}
@@ -1976,10 +1991,10 @@ export default function App() {
                                         <span
                                           className={
                                             snap.indicators.rsi14 <= 32
-                                              ? 'text-emerald-400 font-semibold'
+                                              ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
                                               : snap.indicators.rsi14 >= 68
-                                              ? 'text-rose-400 font-semibold'
-                                              : 'text-slate-300'
+                                              ? 'text-rose-700 dark:text-rose-400 font-semibold'
+                                              : 'text-slate-700 dark:text-slate-300'
                                           }
                                         >
                                           {snap.indicators.rsi14.toFixed(1)}
@@ -1991,7 +2006,7 @@ export default function App() {
                                     <td className="py-3 px-3">
                                       <SignalBadge action={analysis?.action} compact />
                                     </td>
-                                    <td className="py-3 px-3 text-right font-mono text-xs text-slate-300 tabular-nums">
+                                    <td className="py-3 px-3 text-right font-mono text-xs text-slate-700 dark:text-slate-300 tabular-nums">
                                       {analysis ? `${analysis.confidence}%` : '—'}
                                     </td>
                                     <td className="py-3 px-4 text-right">
@@ -2003,7 +2018,7 @@ export default function App() {
                                         }}
                                         title={`Excluir ${asset.symbol} do painel`}
                                         aria-label={`Excluir ${asset.symbol}`}
-                                        className="p-1.5 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                        className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
@@ -2041,13 +2056,13 @@ export default function App() {
 
                 {/* Right 4 columns: Automatic Suggestions Feed + Quick Study Summary */}
                 <aside className="xl:col-span-4 space-y-6">
-                  <section className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-                    <div className="px-5 py-4 border-b border-white/[0.07] flex items-center justify-between gap-2">
+                  <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-2">
                       <div>
-                        <h2 className="text-sm font-semibold text-slate-100">
+                        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                           Sugestões automáticas
                         </h2>
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                           Sinais emitidos quando a IA detecta ponto de ação
                         </p>
                       </div>
@@ -2056,7 +2071,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={handleMarkAlertsRead}
-                            className="text-xs text-sky-400 hover:text-sky-300 whitespace-nowrap"
+                            className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 whitespace-nowrap"
                           >
                             Marcar lidas
                           </button>
@@ -2065,7 +2080,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => void handleClearAlerts()}
-                            className="text-xs text-rose-400 hover:text-rose-300 whitespace-nowrap"
+                            className="text-xs font-medium text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 whitespace-nowrap"
                           >
                             Limpar
                           </button>
@@ -2073,11 +2088,11 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="divide-y divide-white/[0.06] max-h-[540px] overflow-y-auto">
+                    <div className="divide-y divide-slate-200 dark:divide-white/[0.06] max-h-[540px] overflow-y-auto">
                       {state.alerts.length === 0 ? (
                         <div className="p-6 text-center space-y-2">
-                          <Clock className="w-5 h-5 text-slate-500 mx-auto" />
-                          <p className="text-xs text-slate-300 font-medium">
+                          <Clock className="w-5 h-5 text-slate-400 dark:text-slate-500 mx-auto" />
+                          <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
                             Nenhum alerta emitido ainda
                           </p>
                           <p className="text-xs text-slate-500">
@@ -2088,8 +2103,8 @@ export default function App() {
                         state.alerts.slice(0, 14).map((alert) => (
                           <div
                             key={alert.id}
-                            className={`flex items-start gap-2 px-5 py-3.5 hover:bg-white/[0.025] transition-colors ${
-                              !alert.read ? 'bg-sky-500/[0.04]' : ''
+                            className={`flex items-start gap-2 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/[0.025] transition-colors ${
+                              !alert.read ? 'bg-sky-50/70 dark:bg-sky-500/[0.04]' : ''
                             }`}
                           >
                             <button
@@ -2105,7 +2120,7 @@ export default function App() {
                                     name={alert.name}
                                     size="xs"
                                   />
-                                  <span className="font-mono font-bold text-xs text-slate-100">
+                                  <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100">
                                     {alert.symbol}
                                   </span>
                                   <SignalBadge action={alert.action} compact />
@@ -2115,11 +2130,11 @@ export default function App() {
                                 </span>
                               </div>
 
-                              <p className="text-xs font-medium text-slate-200 leading-snug">
+                              <p className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-snug">
                                 {alert.headline}
                               </p>
 
-                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 font-mono tabular-nums">
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                                 <span>
                                   {formatPrice(
                                     alert.priceAtSignalUsd,
@@ -2138,7 +2153,7 @@ export default function App() {
                               onClick={() => void handleDeleteAlert(alert.id)}
                               title="Excluir alerta"
                               aria-label="Excluir alerta"
-                              className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors shrink-0 mt-0.5"
+                              className="p-1 rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 transition-colors shrink-0 mt-0.5"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2149,16 +2164,16 @@ export default function App() {
                   </section>
 
                   {/* Compact Latest Auto-Study Cycle Summary */}
-                  <section className="rounded-xl border border-white/[0.08] bg-[#111827] p-5 space-y-3">
+                  <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-100 inline-flex items-center gap-2">
-                        <BrainCircuit className="w-4 h-4 text-sky-400" />
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
+                        <BrainCircuit className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                         Último ciclo autônomo
                       </h3>
                       <button
                         type="button"
                         onClick={() => setActiveTab('autoestudo')}
-                        className="text-xs text-sky-400 hover:text-sky-300 whitespace-nowrap"
+                        className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 whitespace-nowrap"
                       >
                         Ver histórico
                       </button>
@@ -2166,10 +2181,10 @@ export default function App() {
 
                     {state.studyHistory[0] ? (
                       <div className="space-y-2.5">
-                        <p className="text-xs text-slate-300 leading-relaxed">
+                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                           {state.studyHistory[0].marketSummary}
                         </p>
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 font-mono tabular-nums">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                           <span>
                             Concluído às {formatTimeClock(state.studyHistory[0].completedAt)}
                           </span>
@@ -2180,13 +2195,13 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
                         O primeiro ciclo automático está sendo preparado.
                       </p>
                     )}
 
-                    <div className="pt-2 border-t border-white/[0.07] flex items-center justify-between gap-2 text-xs">
-                      <span className="text-slate-400">
+                    <div className="pt-2 border-t border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-600 dark:text-slate-400">
                         Frequência: a cada {state.settings.intervalMinutes} min
                       </span>
                       <button
@@ -2196,7 +2211,7 @@ export default function App() {
                             autoStudyEnabled: !state.settings.autoStudyEnabled,
                           })
                         }
-                        className="text-sky-400 hover:text-sky-300 font-medium whitespace-nowrap"
+                        className="text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 font-medium whitespace-nowrap"
                       >
                         {state.settings.autoStudyEnabled ? 'Pausar' : 'Ativar'}
                       </button>
@@ -2229,20 +2244,20 @@ export default function App() {
 
             {/* VIEW 2: ATIVOS (Extended Matrix) */}
             {activeTab === 'ativos' && (
-              <section className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-                <div className="px-5 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+              <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-base font-semibold text-slate-100">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                       Criptoativos monitorados ({state.watchlist.length})
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                       Adicione qualquer criptomoeda para que a IA estude seus indicadores automaticamente.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAddModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors whitespace-nowrap shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Nova criptomoeda
@@ -2252,16 +2267,16 @@ export default function App() {
                 <div className="overflow-x-auto">
                   {state.watchlist.length === 0 ? (
                     <div className="p-10 text-center space-y-3">
-                      <p className="text-sm font-medium text-slate-200">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
                         Nenhum criptoativo adicionado ainda
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
                         Cadastre seus ativos oficiais para liberar o monitoramento em tempo real e estudos da IA.
                       </p>
                       <button
                         type="button"
                         onClick={() => setAddModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Adicionar meu primeiro ativo
@@ -2270,7 +2285,7 @@ export default function App() {
                   ) : (
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-white/[0.06] text-[11px] font-medium text-slate-400">
+                        <tr className="border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-transparent text-[11px] font-medium text-slate-600 dark:text-slate-400">
                           <th className="py-3 px-5">Ativo</th>
                           <th className="py-3 px-3 text-right">Preço</th>
                           <th className="py-3 px-3 text-right">24h / 7d</th>
@@ -2281,12 +2296,12 @@ export default function App() {
                           <th className="py-3 px-5 text-right">Ações</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/[0.05] text-xs">
+                      <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-xs">
                         {state.watchlist.map((asset) => {
                           const snap = state.snapshots[asset.id];
                           const analysis = state.analyses[asset.id];
                           return (
-                            <tr key={asset.id} className="hover:bg-white/[0.02]">
+                            <tr key={asset.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                               <td className="py-3.5 px-5">
                                 <div className="flex items-center gap-3">
                                   <CryptoLogo
@@ -2296,14 +2311,14 @@ export default function App() {
                                     size="sm"
                                   />
                                   <div>
-                                    <div className="font-mono font-bold text-slate-100">
+                                    <div className="font-mono font-bold text-slate-900 dark:text-slate-100">
                                       {asset.symbol}
                                     </div>
-                                    <div className="text-slate-400">{asset.name}</div>
+                                    <div className="text-slate-600 dark:text-slate-400">{asset.name}</div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="py-3.5 px-3 text-right font-mono font-semibold text-slate-100 tabular-nums whitespace-nowrap">
+                              <td className="py-3.5 px-3 text-right font-mono font-semibold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
                                 {snap
                                   ? formatPrice(
                                       snap.priceUsd,
@@ -2312,12 +2327,12 @@ export default function App() {
                                     )
                                   : '—'}
                               </td>
-                              <td className="py-3.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
+                              <td className="py-3.5 px-3 text-right font-mono font-medium tabular-nums whitespace-nowrap">
                                 <div
                                   className={
                                     (snap?.change24hPct ?? 0) >= 0
-                                      ? 'text-emerald-400'
-                                      : 'text-rose-400'
+                                      ? 'text-emerald-700 dark:text-emerald-400'
+                                      : 'text-rose-700 dark:text-rose-400'
                                   }
                                 >
                                   {snap ? formatPercent(snap.change24hPct) : '—'}
@@ -2326,7 +2341,7 @@ export default function App() {
                                   {snap ? formatPercent(snap.change7dPct) : '—'}
                                 </div>
                               </td>
-                              <td className="py-3.5 px-3 text-right font-mono text-slate-300 tabular-nums whitespace-nowrap">
+                              <td className="py-3.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">
                                 {snap
                                   ? formatCompactVolume(
                                       snap.volume24hUsd,
@@ -2335,10 +2350,10 @@ export default function App() {
                                     )
                                   : '—'}
                               </td>
-                              <td className="py-3.5 px-3 text-right font-mono tabular-nums">
+                              <td className="py-3.5 px-3 text-right font-mono text-slate-800 dark:text-slate-200 tabular-nums">
                                 {snap ? snap.indicators.rsi14.toFixed(1) : '—'}
                               </td>
-                              <td className="py-3.5 px-3 capitalize text-slate-300">
+                              <td className="py-3.5 px-3 capitalize text-slate-700 dark:text-slate-300">
                                 {snap?.indicators.emaTrend ?? '—'}
                               </td>
                               <td className="py-3.5 px-3">
@@ -2352,7 +2367,7 @@ export default function App() {
                                       setSelectedCoinId(asset.id);
                                       setActiveTab('painel');
                                     }}
-                                    className="px-2.5 py-1 rounded border border-white/10 hover:bg-slate-800 text-slate-200 transition-colors"
+                                    className="px-2.5 py-1 rounded border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors"
                                   >
                                     Detalhes
                                   </button>
@@ -2360,7 +2375,7 @@ export default function App() {
                                     type="button"
                                     disabled={state.isStudying}
                                     onClick={() => handleRunStudy(asset.id)}
-                                    className="px-2.5 py-1 rounded bg-sky-600/20 border border-sky-500/30 hover:bg-sky-600/30 text-sky-300 transition-colors disabled:opacity-50"
+                                    className="px-2.5 py-1 rounded bg-sky-50 dark:bg-sky-600/20 border border-sky-300 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-600/30 text-sky-700 dark:text-sky-300 font-medium transition-colors disabled:opacity-50"
                                   >
                                     Estudar
                                   </button>
@@ -2369,7 +2384,7 @@ export default function App() {
                                     onClick={() => void handleRemoveAsset(asset.id)}
                                     title={`Excluir ${asset.symbol}`}
                                     aria-label={`Excluir ${asset.symbol}`}
-                                    className="p-1.5 rounded border border-white/10 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+                                    className="p-1.5 rounded border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-500/30 transition-colors"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -2388,13 +2403,13 @@ export default function App() {
             {/* VIEW 3: AUTOESTUDO & MEMÓRIA DA IA */}
             {activeTab === 'autoestudo' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-7 rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-                  <div className="px-5 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                <div className="lg:col-span-7 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-base font-semibold text-slate-100">
+                      <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                         Histórico de estudos autônomos
                       </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                         A cada ciclo, a IA compara previsões anteriores com o preço real antes de emitir novos pareceres.
                       </p>
                     </div>
@@ -2403,7 +2418,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => void handleClearStudyHistory()}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-500/25 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors whitespace-nowrap"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 dark:border-rose-500/25 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors whitespace-nowrap"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           Limpar histórico
@@ -2413,24 +2428,24 @@ export default function App() {
                         type="button"
                         disabled={state.isStudying || state.watchlist.length === 0}
                         onClick={() => handleRunStudy()}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50 whitespace-nowrap"
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white disabled:opacity-50 whitespace-nowrap"
                       >
                         Executar ciclo
                       </button>
                     </div>
                   </div>
 
-                  <div className="divide-y divide-white/[0.06]">
+                  <div className="divide-y divide-slate-200 dark:divide-white/[0.06]">
                     {state.studyHistory.length === 0 ? (
-                      <div className="p-8 text-center text-xs text-slate-400">
+                      <div className="p-8 text-center text-xs text-slate-600 dark:text-slate-400">
                         Nenhum ciclo registrado até o momento. Adicione ativos e clique em &quot;Executar ciclo&quot; para iniciar.
                       </div>
                     ) : (
                       state.studyHistory.map((cycle) => (
                         <div key={cycle.id} className="p-5 space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2 font-mono text-slate-300 tabular-nums">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <div className="flex items-center gap-2 font-mono text-slate-700 dark:text-slate-300 tabular-nums">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                               <span>
                                 {new Date(cycle.completedAt).toLocaleString('pt-BR', {
                                   day: '2-digit',
@@ -2445,7 +2460,7 @@ export default function App() {
                               </span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-xs font-mono text-slate-400 tabular-nums">
+                              <span className="text-xs font-mono text-slate-600 dark:text-slate-400 tabular-nums">
                                 {cycle.buySignals} compra · {cycle.sellSignals} venda ·{' '}
                                 {cycle.holdSignals} espera
                               </span>
@@ -2454,13 +2469,13 @@ export default function App() {
                                 onClick={() => void handleDeleteStudyCycle(cycle.id)}
                                 title="Excluir registro de ciclo"
                                 aria-label="Excluir registro de ciclo"
-                                className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                                className="p-1 rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
-                          <p className="text-xs text-slate-300 leading-relaxed">
+                          <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                             {cycle.marketSummary}
                           </p>
                           <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono tabular-nums">
@@ -2470,7 +2485,7 @@ export default function App() {
                             {cycle.evaluatedAccuracyPct !== null && (
                               <>
                                 <span aria-hidden="true">·</span>
-                                <span className="text-emerald-400">
+                                <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                                   Acerto acumulado: {cycle.evaluatedAccuracyPct}%
                                 </span>
                               </>
@@ -2497,14 +2512,14 @@ export default function App() {
             {activeTab === 'alertas' && (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-1 rounded-lg bg-[#111827] p-1 border border-white/[0.08]">
+                  <div className="flex items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-200 dark:border-white/[0.08] shadow-xs dark:shadow-none">
                     <button
                       type="button"
                       onClick={() => setAlertsSubTab('triggers')}
                       className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         alertsSubTab === 'triggers'
                           ? 'bg-sky-600 text-white'
-                          : 'text-slate-400 hover:text-slate-200'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       Gatilhos WhatsApp 24h ({(state.triggers ?? []).length})
@@ -2515,21 +2530,21 @@ export default function App() {
                       className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         alertsSubTab === 'alerts'
                           ? 'bg-sky-600 text-white'
-                          : 'text-slate-400 hover:text-slate-200'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       Histórico de Alertas ({state.alerts.length})
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1 rounded-lg bg-[#111827] p-1 border border-white/[0.08]">
+                  <div className="flex items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-200 dark:border-white/[0.08] shadow-xs dark:shadow-none">
                     <button
                       type="button"
                       onClick={() => setRightSettingsTab('whatsapp')}
                       className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         rightSettingsTab === 'whatsapp'
                           ? 'bg-emerald-600 text-white'
-                          : 'text-slate-400 hover:text-slate-200'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       Configurar WhatsApp 24h
@@ -2540,7 +2555,7 @@ export default function App() {
                       className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         rightSettingsTab === 'automacao'
                           ? 'bg-sky-600 text-white'
-                          : 'text-slate-400 hover:text-slate-200'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       Automação IA & Webhook
@@ -2564,13 +2579,13 @@ export default function App() {
                         onClearTriggers={handleClearTriggers}
                       />
                     ) : (
-                      <div className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-                        <div className="px-5 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                      <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h2 className="text-base font-semibold text-slate-100">
+                            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                               Registro completo de sugestões ({state.alerts.length})
                             </h2>
-                            <p className="text-xs text-slate-400 mt-0.5">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                               Acompanhamento de retorno real desde o momento em que cada sugestão ou gatilho foi disparado.
                             </p>
                           </div>
@@ -2579,7 +2594,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={handleMarkAlertsRead}
-                                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-200 whitespace-nowrap"
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 whitespace-nowrap"
                               >
                                 Marcar todas como lidas
                               </button>
@@ -2588,7 +2603,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => void handleClearAlerts()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-500/25 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors whitespace-nowrap"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 dark:border-rose-500/25 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors whitespace-nowrap"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 Limpar histórico
@@ -2597,9 +2612,9 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="divide-y divide-white/[0.06]">
+                        <div className="divide-y divide-slate-200 dark:divide-white/[0.06]">
                           {state.alerts.length === 0 ? (
-                            <div className="p-8 text-center text-xs text-slate-400">
+                            <div className="p-8 text-center text-xs text-slate-600 dark:text-slate-400">
                               Sem alertas registrados ainda.
                             </div>
                           ) : (
@@ -2613,10 +2628,10 @@ export default function App() {
                                       name={alert.name}
                                       size="sm"
                                     />
-                                    <span className="font-mono font-bold text-sm text-slate-100">
+                                    <span className="font-mono font-bold text-sm text-slate-900 dark:text-slate-100">
                                       {alert.symbol}
                                     </span>
-                                    <span className="text-xs text-slate-400">{alert.name}</span>
+                                    <span className="text-xs text-slate-600 dark:text-slate-400">{alert.name}</span>
                                     <SignalBadge action={alert.action} compact />
                                   </div>
                                   <div className="flex items-center gap-3">
@@ -2633,21 +2648,21 @@ export default function App() {
                                       onClick={() => void handleDeleteAlert(alert.id)}
                                       title="Excluir alerta"
                                       aria-label="Excluir alerta"
-                                      className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                                      className="p-1 rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </div>
 
-                                <p className="text-sm font-medium text-slate-200">
+                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
                                   {alert.headline}
                                 </p>
-                                <p className="text-xs text-slate-400 leading-relaxed">
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                                   {alert.reason}
                                 </p>
 
-                                <div className="pt-1 flex flex-wrap items-center gap-3 text-xs font-mono tabular-nums text-slate-400">
+                                <div className="pt-1 flex flex-wrap items-center gap-3 text-xs font-mono tabular-nums text-slate-600 dark:text-slate-400">
                                   <span>
                                     Sinal em{' '}
                                     {formatPrice(
@@ -2701,8 +2716,8 @@ export default function App() {
       </main>
 
       {/* Quiet Footer */}
-      <footer className="border-t border-white/[0.06] py-5 px-4 sm:px-6">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+      <footer className="border-t border-slate-200 dark:border-white/[0.06] py-5 px-4 sm:px-6">
+        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600 dark:text-slate-500">
           <span>
             SinalCripto IA — Análises geradas por inteligência artificial com dados de mercado em tempo real para fins informativos e educacionais. Não constitui recomendação financeira oficial.
           </span>

@@ -150,28 +150,28 @@ export function PriceChart({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-4 text-xs text-slate-400">
+        <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
           {activePoint ? (
             <div className="flex flex-wrap items-center gap-3 font-mono tabular-nums">
-              <span className="text-slate-100 font-semibold">
+              <span className="text-slate-900 dark:text-slate-100 font-semibold">
                 {formatPrice(activePoint.price, currency, usdBrlRate)}
               </span>
               {activePoint.ema9 !== null && (
-                <span className="text-sky-400">
+                <span className="text-sky-700 dark:text-sky-400">
                   EMA9 {formatPrice(activePoint.ema9, currency, usdBrlRate)}
                 </span>
               )}
               {activePoint.ema21 !== null && (
-                <span className="text-amber-400">
+                <span className="text-amber-700 dark:text-amber-400">
                   EMA21 {formatPrice(activePoint.ema21, currency, usdBrlRate)}
                 </span>
               )}
               {activePoint.rsi !== null && (
-                <span className="text-slate-300">
+                <span className="text-slate-700 dark:text-slate-300">
                   RSI {activePoint.rsi.toFixed(1)}
                 </span>
               )}
-              <span className="text-slate-500">
+              <span className="text-slate-500 dark:text-slate-500">
                 {new Date(activePoint.timestamp).toLocaleString('pt-BR', {
                   day: '2-digit',
                   month: '2-digit',
@@ -186,14 +186,14 @@ export function PriceChart({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-md bg-slate-900/90 p-0.5 border border-white/[0.07]">
+          <div className="flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-900/90 p-0.5 border border-slate-200 dark:border-white/[0.07]">
             <button
               type="button"
               onClick={() => setShowEma((v) => !v)}
               className={`px-2 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                 showEma
-                  ? 'bg-slate-800 text-sky-300'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-sky-700 shadow-xs dark:shadow-none dark:bg-slate-800 dark:text-sky-300'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               EMAs
@@ -203,15 +203,15 @@ export function PriceChart({
               onClick={() => setShowBollinger((v) => !v)}
               className={`px-2 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                 showBollinger
-                  ? 'bg-slate-800 text-slate-200'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-slate-900 shadow-xs dark:shadow-none dark:bg-slate-800 dark:text-slate-200'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               Bollinger
             </button>
           </div>
 
-          <div className="flex items-center gap-1 rounded-md bg-slate-900/90 p-0.5 border border-white/[0.07]">
+          <div className="flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-900/90 p-0.5 border border-slate-200 dark:border-white/[0.07]">
             {(['24h', '7d', '30d'] as const).map((r) => (
               <button
                 key={r}
@@ -220,7 +220,7 @@ export function PriceChart({
                 className={`px-2.5 py-1 text-[11px] font-mono font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                   range === r
                     ? 'bg-sky-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 {r.toUpperCase()}
@@ -230,13 +230,13 @@ export function PriceChart({
         </div>
       </div>
 
-      <div className="relative w-full h-[270px] rounded-lg border border-white/[0.07] bg-[#0B0F17] overflow-hidden">
+      <div className="relative w-full h-[270px] rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] overflow-hidden">
         {loading ? (
           <div className="w-full h-full flex items-center justify-center">
-            <div className="w-full h-full animate-pulse bg-slate-900/60" />
+            <div className="w-full h-full animate-pulse bg-slate-200/70 dark:bg-slate-900/60" />
           </div>
         ) : error || !geometry ? (
-          <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+          <div className="w-full h-full flex items-center justify-center text-xs text-slate-600 dark:text-slate-400">
             {error || 'Série histórica indisponível no momento.'}
           </div>
         ) : (
@@ -254,7 +254,7 @@ export function PriceChart({
           >
             <defs>
               <linearGradient id={`grad-${coinId}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={strokeColor} stopOpacity="0.24" />
+                <stop offset="0%" stopColor={strokeColor} stopOpacity="0.22" />
                 <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
               </linearGradient>
             </defs>
@@ -271,14 +271,14 @@ export function PriceChart({
                     y1={y}
                     x2={width - padRight}
                     y2={y}
-                    stroke="rgba(148,163,184,0.1)"
+                    stroke="var(--chart-grid)"
                     strokeDasharray="3 4"
                   />
                   <text
                     x={width - padRight - 4}
                     y={y - 4}
                     textAnchor="end"
-                    fill="rgba(148,163,184,0.55)"
+                    fill="var(--chart-axis)"
                     fontSize="10"
                     fontFamily="JetBrains Mono, monospace"
                   >
@@ -296,15 +296,15 @@ export function PriceChart({
                   y1={geometry.targetY}
                   x2={width - padRight}
                   y2={geometry.targetY}
-                  stroke="#10B981"
+                  stroke="#059669"
                   strokeWidth="1"
                   strokeDasharray="4 4"
-                  strokeOpacity="0.7"
+                  strokeOpacity="0.75"
                 />
                 <text
                   x={padLeft + 6}
                   y={geometry.targetY - 4}
-                  fill="#34D399"
+                  fill="var(--chart-target-text)"
                   fontSize="10"
                   fontFamily="JetBrains Mono, monospace"
                 >
@@ -320,15 +320,15 @@ export function PriceChart({
                   y1={geometry.stopY}
                   x2={width - padRight}
                   y2={geometry.stopY}
-                  stroke="#EF4444"
+                  stroke="#DC2626"
                   strokeWidth="1"
                   strokeDasharray="4 4"
-                  strokeOpacity="0.65"
+                  strokeOpacity="0.7"
                 />
                 <text
                   x={padLeft + 6}
                   y={geometry.stopY + 12}
-                  fill="#F87171"
+                  fill="var(--chart-stop-text)"
                   fontSize="10"
                   fontFamily="JetBrains Mono, monospace"
                 >
@@ -342,7 +342,7 @@ export function PriceChart({
               <path
                 d={geometry.bbUpperPath}
                 fill="none"
-                stroke="rgba(148,163,184,0.28)"
+                stroke="var(--chart-bb)"
                 strokeWidth="1"
                 strokeDasharray="2 3"
               />
@@ -351,7 +351,7 @@ export function PriceChart({
               <path
                 d={geometry.bbLowerPath}
                 fill="none"
-                stroke="rgba(148,163,184,0.28)"
+                stroke="var(--chart-bb)"
                 strokeWidth="1"
                 strokeDasharray="2 3"
               />
@@ -372,18 +372,18 @@ export function PriceChart({
               <path
                 d={geometry.ema9Path}
                 fill="none"
-                stroke="#38BDF8"
-                strokeWidth="1.25"
-                strokeOpacity="0.85"
+                stroke="var(--chart-ema9)"
+                strokeWidth="1.35"
+                strokeOpacity="0.9"
               />
             )}
             {showEma && geometry.ema21Path && (
               <path
                 d={geometry.ema21Path}
                 fill="none"
-                stroke="#F59E0B"
-                strokeWidth="1.25"
-                strokeOpacity="0.8"
+                stroke="var(--chart-ema21)"
+                strokeWidth="1.35"
+                strokeOpacity="0.85"
               />
             )}
 
@@ -395,7 +395,7 @@ export function PriceChart({
                   y1={padTop}
                   x2={geometry.toX(hoverIdx)}
                   y2={padTop + plotH}
-                  stroke="rgba(241,245,249,0.25)"
+                  stroke="var(--chart-crosshair)"
                   strokeWidth="1"
                 />
                 <circle
@@ -403,7 +403,7 @@ export function PriceChart({
                   cy={geometry.toY(points[hoverIdx].price)}
                   r="4"
                   fill={strokeColor}
-                  stroke="#0B0F17"
+                  stroke="var(--chart-dot-stroke)"
                   strokeWidth="1.5"
                 />
               </g>

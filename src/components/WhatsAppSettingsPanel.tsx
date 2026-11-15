@@ -89,14 +89,14 @@ export function WhatsAppSettingsPanel({
   }
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-5 space-y-5">
+    <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5 space-y-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-emerald-400" />
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             Envio automático no WhatsApp (24h)
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
             O servidor monitora os preços a cada 10s e envia seus gatilhos mesmo com a aba fechada.
           </p>
         </div>
@@ -106,8 +106,8 @@ export function WhatsAppSettingsPanel({
           onClick={() => void handleToggleEnabled()}
           className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
             draft.enabled
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : 'border-white/10 bg-slate-800 text-slate-300'
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
+              : 'border-slate-300 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-slate-800 dark:text-slate-300'
           }`}
         >
           {draft.enabled ? 'WhatsApp ativo' : 'WhatsApp pausado'}
@@ -115,11 +115,11 @@ export function WhatsAppSettingsPanel({
       </div>
 
       {/* Provider selector */}
-      <div className="space-y-2 pt-3 border-t border-white/[0.07]">
-        <label className="block text-xs text-slate-400">
+      <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-white/[0.07]">
+        <label className="block text-xs text-slate-600 dark:text-slate-400">
           Método de envio automático
         </label>
-        <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.07]">
+        <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
           {(
             [
               { id: 'callmebot', label: 'CallMeBot (Grátis)' },
@@ -134,7 +134,7 @@ export function WhatsAppSettingsPanel({
               className={`py-1.5 px-2 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap truncate ${
                 draft.provider === opt.id
                   ? 'bg-sky-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               {opt.label}
@@ -145,7 +145,7 @@ export function WhatsAppSettingsPanel({
 
       {/* Phone input */}
       <div>
-        <label className="block text-xs text-slate-400 mb-1.5">
+        <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
           Seu número de WhatsApp (com DDI + DDD)
         </label>
         <input
@@ -153,24 +153,24 @@ export function WhatsAppSettingsPanel({
           value={draft.phoneNumber}
           onChange={(e) => setField('phoneNumber', e.target.value)}
           placeholder="+5511999999999"
-          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
         />
       </div>
 
       {/* Provider-specific fields */}
       {draft.provider === 'callmebot' && (
         <div className="space-y-3">
-          <div className="rounded-lg border border-white/[0.07] bg-[#0B0F17] px-3.5 py-2.5 text-[11px] text-slate-300 leading-relaxed space-y-1">
-            <p className="font-semibold text-slate-100">
+          <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] px-3.5 py-2.5 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed space-y-1">
+            <p className="font-semibold text-slate-900 dark:text-slate-100">
               Ativação gratuita em 30 segundos (CallMeBot):
             </p>
             <p>
-              1. Salve o contato <span className="font-mono text-emerald-400">+34 644 71 81 99</span> no WhatsApp e envie: <span className="font-mono text-slate-100">I allow callmebot to send me messages</span>
+              1. Salve o contato <span className="font-mono text-emerald-700 dark:text-emerald-400">+34 644 71 81 99</span> no WhatsApp e envie: <span className="font-mono text-slate-900 dark:text-slate-100">I allow callmebot to send me messages</span>
             </p>
             <p>2. Cole abaixo a API Key que o bot responder no seu WhatsApp.</p>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
               CallMeBot API Key
             </label>
             <input
@@ -178,7 +178,7 @@ export function WhatsAppSettingsPanel({
               value={draft.callMeBotApiKey}
               onChange={(e) => setField('callMeBotApiKey', e.target.value)}
               placeholder="Ex: 1234567"
-              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
           </div>
         </div>
@@ -187,7 +187,7 @@ export function WhatsAppSettingsPanel({
       {draft.provider === 'webhook_rest' && (
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
               URL do Endpoint (Evolution API, Z-API, Make ou n8n)
             </label>
             <input
@@ -195,11 +195,11 @@ export function WhatsAppSettingsPanel({
               value={draft.customWebhookUrl}
               onChange={(e) => setField('customWebhookUrl', e.target.value)}
               placeholder="https://seu-servidor.com/message/sendText/instancia"
-              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
               Token / API Key do gateway (opcional)
             </label>
             <input
@@ -207,7 +207,7 @@ export function WhatsAppSettingsPanel({
               value={draft.customWebhookToken}
               onChange={(e) => setField('customWebhookToken', e.target.value)}
               placeholder="Enviado em apikey e Authorization Bearer"
-              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
           </div>
         </div>
@@ -216,7 +216,7 @@ export function WhatsAppSettingsPanel({
       {draft.provider === 'meta_cloud' && (
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
               Phone Number ID (Meta Developers)
             </label>
             <input
@@ -224,11 +224,11 @@ export function WhatsAppSettingsPanel({
               value={draft.metaPhoneNumberId}
               onChange={(e) => setField('metaPhoneNumberId', e.target.value)}
               placeholder="Ex: 109876543210987"
-              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
               Access Token (Bearer)
             </label>
             <input
@@ -236,22 +236,22 @@ export function WhatsAppSettingsPanel({
               value={draft.metaAccessToken}
               onChange={(e) => setField('metaAccessToken', e.target.value)}
               placeholder="EAAG..."
-              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
           </div>
         </div>
       )}
 
       {/* Forward AI Signals Toggle */}
-      <label className="flex items-center justify-between gap-3 pt-3 border-t border-white/[0.07] cursor-pointer">
-        <span className="text-xs text-slate-300">
+      <label className="flex items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-white/[0.07] cursor-pointer">
+        <span className="text-xs text-slate-700 dark:text-slate-300">
           Enviar também sinais automáticos de Compra/Venda da IA no WhatsApp
         </span>
         <input
           type="checkbox"
           checked={draft.forwardAiSignals}
           onChange={(e) => setField('forwardAiSignals', e.target.checked)}
-          className="w-4 h-4 accent-sky-500 cursor-pointer shrink-0"
+          className="w-4 h-4 accent-sky-600 dark:accent-sky-500 cursor-pointer shrink-0"
         />
       </label>
 
@@ -274,7 +274,7 @@ export function WhatsAppSettingsPanel({
           type="button"
           onClick={() => void handleTest()}
           disabled={testing}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors disabled:opacity-50 whitespace-nowrap"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors disabled:opacity-50 whitespace-nowrap"
         >
           {testing ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -289,8 +289,8 @@ export function WhatsAppSettingsPanel({
         <p
           className={`text-xs rounded-lg px-3 py-2 border ${
             statusMsg.type === 'ok'
-              ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
-              : 'text-rose-300 bg-rose-500/10 border-rose-500/25'
+              ? 'text-emerald-700 bg-emerald-50 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25'
+              : 'text-rose-700 bg-rose-50 border-rose-300 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/25'
           }`}
         >
           {statusMsg.text}

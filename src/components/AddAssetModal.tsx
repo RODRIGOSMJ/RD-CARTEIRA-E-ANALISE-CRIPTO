@@ -77,25 +77,25 @@ export function AddAssetModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 dark:bg-black/70 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-asset-title"
     >
-      <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111827] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/[0.08]">
           <div>
-            <h2 id="add-asset-title" className="text-base font-semibold text-slate-100">
+            <h2 id="add-asset-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Adicionar criptomoeda ao monitoramento
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
               A IA iniciará o estudo automático assim que o ativo for incluído.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-colors"
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             aria-label="Fechar janela"
           >
             <X className="w-4 h-4" />
@@ -111,23 +111,23 @@ export function AddAssetModal({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Digite o nome ou ticker da criptomoeda..."
               autoFocus
-              className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+              className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
             />
             {searching && (
-              <Loader2 className="w-4 h-4 text-sky-400 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2" />
+              <Loader2 className="w-4 h-4 text-sky-600 dark:text-sky-400 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2" />
             )}
           </div>
 
           {error && (
-            <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+            <p className="text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/20 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
           {query.trim().length >= 2 ? (
-            <div className="max-h-64 overflow-y-auto divide-y divide-white/[0.06] border border-white/[0.07] rounded-lg bg-[#0B0F17]">
+            <div className="max-h-64 overflow-y-auto divide-y divide-slate-200 dark:divide-white/[0.06] border border-slate-200 dark:border-white/[0.07] rounded-lg bg-slate-50 dark:bg-[#0B0F17]">
               {results.length === 0 && !searching ? (
-                <p className="p-4 text-xs text-slate-400 text-center">
+                <p className="p-4 text-xs text-slate-600 dark:text-slate-400 text-center">
                   Nenhum ativo encontrado para &quot;{query}&quot;.
                 </p>
               ) : (
@@ -137,7 +137,7 @@ export function AddAssetModal({
                   return (
                     <div
                       key={coin.id}
-                      className="flex items-center justify-between px-3.5 py-2.5 hover:bg-white/[0.02]"
+                      className="flex items-center justify-between px-3.5 py-2.5 hover:bg-slate-100 dark:hover:bg-white/[0.02]"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <CryptoLogo
@@ -148,10 +148,10 @@ export function AddAssetModal({
                         />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-100 font-mono">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 font-mono">
                               {coin.symbol}
                             </span>
-                            <span className="text-xs text-slate-300 truncate">
+                            <span className="text-xs text-slate-600 dark:text-slate-300 truncate">
                               {coin.name}
                             </span>
                           </div>
@@ -168,7 +168,7 @@ export function AddAssetModal({
                         onClick={() => handleSelect(coin)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
                           alreadyAdded
-                            ? 'text-slate-500 bg-slate-800/60 cursor-not-allowed'
+                            ? 'text-slate-500 bg-slate-200 dark:bg-slate-800/60 cursor-not-allowed'
                             : 'bg-sky-600 hover:bg-sky-500 text-white'
                         }`}
                       >
@@ -185,7 +185,7 @@ export function AddAssetModal({
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-white/[0.07] bg-[#0B0F17] p-4 text-xs text-slate-400 leading-relaxed">
+            <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] p-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               Digite pelo menos 2 caracteres acima para pesquisar qualquer criptomoeda oficial em tempo real e adicioná-la ao seu painel de monitoramento.
             </div>
           )}

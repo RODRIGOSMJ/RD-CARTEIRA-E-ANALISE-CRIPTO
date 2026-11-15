@@ -231,25 +231,25 @@ export function AddTransactionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 dark:bg-black/75 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-tx-title"
     >
-      <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111827] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/[0.08]">
           <div>
-            <h2 id="add-tx-title" className="text-base font-semibold text-slate-100">
+            <h2 id="add-tx-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Adicionar transação na carteira
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
               Os dados da carteira são integrados automaticamente aos sinais da IA.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-colors"
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             aria-label="Fechar"
           >
             <X className="w-4 h-4" />
@@ -258,7 +258,7 @@ export function AddTransactionModal({
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Type segmented tabs: Compra | Venda | Ganho */}
-          <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.08]">
+          <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.08]">
             {(
               [
                 { id: 'compra', label: 'Compra' },
@@ -277,7 +277,7 @@ export function AddTransactionModal({
                       : tab.id === 'venda'
                       ? 'bg-rose-600 text-white'
                       : 'bg-sky-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 {tab.label}
@@ -288,11 +288,11 @@ export function AddTransactionModal({
           {/* Coin selector / search */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-medium text-slate-300">
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                 Criptomoeda
               </label>
               {selectedCoin ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-mono text-sky-400 font-semibold">
+                <span className="inline-flex items-center gap-1.5 text-xs font-mono text-sky-700 dark:text-sky-400 font-semibold">
                   <CryptoLogo
                     symbol={selectedCoin.symbol}
                     coinId={selectedCoin.id}
@@ -302,34 +302,34 @@ export function AddTransactionModal({
                   Selecionada: {selectedCoin.name} ({selectedCoin.symbol})
                 </span>
               ) : (
-                <span className="text-xs text-amber-400">
+                <span className="text-xs text-amber-700 dark:text-amber-400">
                   Nenhuma selecionada — busque abaixo
                 </span>
               )}
             </div>
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 autoFocus={watchlist.length === 0}
                 value={coinSearch}
                 onChange={(e) => setCoinSearch(e.target.value)}
                 placeholder="Buscar qualquer criptomoeda (ex: BTC, ETH, SOL, CAKE...)"
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-sky-500"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-sky-500"
               />
               {searching && (
-                <Loader2 className="w-3.5 h-3.5 text-sky-400 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                <Loader2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
               )}
             </div>
 
             {searchResults.length > 0 ? (
-              <div className="max-h-36 overflow-y-auto divide-y divide-white/[0.06] rounded-lg border border-white/10 bg-[#0B0F17]">
+              <div className="max-h-36 overflow-y-auto divide-y divide-slate-200 dark:divide-white/[0.06] rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0B0F17]">
                 {searchResults.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => selectAsset(c)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-white/[0.04]"
+                    className="w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-slate-100 dark:hover:bg-white/[0.04]"
                   >
                     <span className="inline-flex items-center gap-2 min-w-0">
                       <CryptoLogo
@@ -338,12 +338,12 @@ export function AddTransactionModal({
                         name={c.name}
                         size="xs"
                       />
-                      <span className="font-mono font-bold text-slate-100">
+                      <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
                         {c.symbol}
                       </span>
-                      <span className="text-slate-300 truncate">{c.name}</span>
+                      <span className="text-slate-600 dark:text-slate-300 truncate">{c.name}</span>
                     </span>
-                    <Plus className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <Plus className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                   </button>
                 ))}
               </div>
@@ -356,8 +356,8 @@ export function AddTransactionModal({
                     onClick={() => selectAsset(w)}
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono font-medium rounded-md border transition-colors whitespace-nowrap ${
                       selectedCoin?.id === w.id
-                        ? 'border-sky-500/50 bg-sky-500/15 text-sky-300'
-                        : 'border-white/[0.07] bg-[#0B0F17] text-slate-400 hover:text-slate-200'
+                        ? 'border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-300'
+                        : 'border-slate-300 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-slate-200'
                     }`}
                   >
                     <CryptoLogo
@@ -376,7 +376,7 @@ export function AddTransactionModal({
           {/* Quantity and Price */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 Quantidade ({selectedCoin?.symbol || 'Moeda'})
               </label>
               <input
@@ -386,21 +386,21 @@ export function AddTransactionModal({
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 text-sm font-mono tabular-nums rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm font-mono tabular-nums rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
               />
             </div>
 
             {txType !== 'ganho' ? (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-slate-300">
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                     Preço ({currency})
                   </label>
                   {effectiveLiveUsd && (
                     <button
                       type="button"
                       onClick={applyLivePrice}
-                      className="text-[11px] text-sky-400 hover:text-sky-300"
+                      className="text-[11px] text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300"
                     >
                       Usar atual ({formatPrice(effectiveLiveUsd, currency, usdBrlRate)})
                     </button>
@@ -416,15 +416,15 @@ export function AddTransactionModal({
                     setPriceInput(e.target.value);
                   }}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 text-sm font-mono tabular-nums rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 text-sm font-mono tabular-nums rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Custo base do ganho
                 </label>
-                <div className="px-3 py-2 text-xs font-mono text-emerald-400 rounded-lg border border-white/[0.07] bg-[#0B0F17]">
+                <div className="px-3 py-2 text-xs font-mono text-emerald-700 dark:text-emerald-400 rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17]">
                   {currency === 'BRL' ? 'R$ 0,00' : 'US$ 0.00'} (Rendimento líquido)
                 </div>
               </div>
@@ -434,20 +434,20 @@ export function AddTransactionModal({
           {/* Date, Fee, Note */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 Data e hora
               </label>
               <input
                 type="datetime-local"
                 value={timestamp}
                 onChange={(e) => setTimestamp(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
               />
             </div>
 
             {txType !== 'ganho' ? (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Taxa opcional ({currency})
                 </label>
                 <input
@@ -457,12 +457,12 @@ export function AddTransactionModal({
                   value={feeInput}
                   onChange={(e) => setFeeInput(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 text-xs font-mono tabular-nums rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 text-xs font-mono tabular-nums rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Origem do ganho
                 </label>
                 <input
@@ -470,7 +470,7 @@ export function AddTransactionModal({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Ex: Staking, Earn, Airdrop"
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 />
               </div>
             )}
@@ -478,7 +478,7 @@ export function AddTransactionModal({
 
           {txType !== 'ganho' && (
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 Observação opcional
               </label>
               <input
@@ -486,21 +486,21 @@ export function AddTransactionModal({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Ex: Compra parcial no suporte"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
               />
             </div>
           )}
 
           {/* Total summary */}
-          <div className="rounded-lg border border-white/[0.08] bg-[#0B0F17] px-4 py-3 flex items-center justify-between">
-            <span className="text-xs text-slate-400">
+          <div className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#0B0F17] px-4 py-3 flex items-center justify-between">
+            <span className="text-xs text-slate-600 dark:text-slate-400">
               {txType === 'compra'
                 ? 'Total investido'
                 : txType === 'venda'
                 ? 'Total recebido'
                 : 'Valor de mercado atual do ganho'}
             </span>
-            <span className="text-sm font-mono font-bold text-slate-100 tabular-nums">
+            <span className="text-sm font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
               {txType === 'ganho' && effectiveLiveUsd
                 ? formatPrice(
                     (Number.isFinite(qtyNum) ? qtyNum : 0) * effectiveLiveUsd,
@@ -516,7 +516,7 @@ export function AddTransactionModal({
           </div>
 
           {error && (
-            <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+            <p className="text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/20 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -525,7 +525,7 @@ export function AddTransactionModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 transition-colors"
+              className="px-4 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
               Cancelar
             </button>

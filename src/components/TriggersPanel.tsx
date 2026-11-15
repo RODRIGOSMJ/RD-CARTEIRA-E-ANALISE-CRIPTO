@@ -70,13 +70,13 @@ export function TriggersPanel({
   onClearTriggers,
 }: TriggersPanelProps) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-      <div className="px-5 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+    <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             Meus gatilhos automáticos 24h ({triggers.length})
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
             {whatsappEnabled
               ? 'WhatsApp ativo: seus gatilhos são verificados a cada 10s e enviados automaticamente.'
               : 'Ative e configure seu WhatsApp ao lado para receber os disparos automaticamente.'}
@@ -88,7 +88,7 @@ export function TriggersPanel({
             <button
               type="button"
               onClick={() => void onClearTriggers()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-500/25 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 dark:border-rose-500/25 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors whitespace-nowrap"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Limpar tudo
@@ -105,15 +105,15 @@ export function TriggersPanel({
         </div>
       </div>
 
-      <div className="divide-y divide-white/[0.06]">
+      <div className="divide-y divide-slate-200 dark:divide-white/[0.06]">
         {triggers.length === 0 ? (
           <div className="p-9 text-center space-y-3">
-            <BellRing className="w-7 h-7 text-sky-400 mx-auto" />
+            <BellRing className="w-7 h-7 text-sky-600 dark:text-sky-400 mx-auto" />
             <div className="space-y-1 max-w-md mx-auto">
-              <p className="text-sm font-medium text-slate-200">
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
                 Nenhum gatilho armazenado ainda
               </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                 Armazene regras como &quot;se a Solana cair 10%, enviar no meu WhatsApp para comprar&quot; e o sistema vigia o mercado 24 horas por dia.
               </p>
             </div>
@@ -149,10 +149,10 @@ export function TriggersPanel({
 
             const actionColor =
               trig.actionHint === 'COMPRAR'
-                ? 'text-emerald-400'
+                ? 'text-emerald-700 dark:text-emerald-400'
                 : trig.actionHint === 'VENDER'
-                ? 'text-rose-400'
-                : 'text-amber-400';
+                ? 'text-rose-700 dark:text-rose-400'
+                : 'text-amber-700 dark:text-amber-400';
 
             return (
               <div key={trig.id} className="p-5 space-y-2.5">
@@ -164,22 +164,24 @@ export function TriggersPanel({
                       name={trig.name}
                       size="sm"
                     />
-                    <span className="font-mono font-bold text-sm text-slate-100">
+                    <span className="font-mono font-bold text-sm text-slate-900 dark:text-slate-100">
                       {trig.symbol}
                     </span>
-                    <span className="text-xs text-slate-400">{trig.name}</span>
-                    <span aria-hidden="true" className="text-slate-600">
+                    <span className="text-xs text-slate-600 dark:text-slate-400">{trig.name}</span>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
                       ·
                     </span>
                     <span className={`text-xs font-mono font-semibold ${actionColor}`}>
                       {trig.actionHint}
                     </span>
-                    <span aria-hidden="true" className="text-slate-600">
+                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
                       ·
                     </span>
                     <span
                       className={`text-xs font-medium ${
-                        trig.enabled ? 'text-emerald-400' : 'text-slate-500'
+                        trig.enabled
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-slate-500'
                       }`}
                     >
                       {trig.enabled ? 'Monitorando 24h' : 'Pausado'}
@@ -193,7 +195,7 @@ export function TriggersPanel({
                         type="button"
                         onClick={() => void onResetReference(trig.id)}
                         title="Atualizar preço base para a cotação atual"
-                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-white/10 text-slate-300 hover:bg-slate-800 transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                       >
                         <RefreshCw className="w-3 h-3" />
                         Zerar base
@@ -204,7 +206,7 @@ export function TriggersPanel({
                       type="button"
                       onClick={() => void onToggleTrigger(trig.id, !trig.enabled)}
                       title={trig.enabled ? 'Pausar gatilho' : 'Reativar gatilho'}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-white/10 text-slate-300 hover:bg-slate-800 transition-colors"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
                       {trig.enabled ? (
                         <>
@@ -224,18 +226,18 @@ export function TriggersPanel({
                       onClick={() => void onDeleteTrigger(trig.id)}
                       title="Excluir gatilho"
                       aria-label={`Excluir gatilho ${trig.symbol}`}
-                      className="p-1.5 rounded border border-white/10 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+                      className="p-1.5 rounded border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-500/30 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono tabular-nums text-slate-300">
-                  <span className="font-semibold text-sky-400">{ruleLabel}</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                  <span className="font-semibold text-sky-700 dark:text-sky-400">{ruleLabel}</span>
                   {targetUsd && (
                     <>
-                      <span className="text-slate-600" aria-hidden="true">
+                      <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">
                         ·
                       </span>
                       <span>
@@ -245,7 +247,7 @@ export function TriggersPanel({
                   )}
                   {currentPriceUsd > 0 && (
                     <>
-                      <span className="text-slate-600" aria-hidden="true">
+                      <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">
                         ·
                       </span>
                       <span>
@@ -255,12 +257,14 @@ export function TriggersPanel({
                   )}
                   {currentDeltaPct !== null && (
                     <>
-                      <span className="text-slate-600" aria-hidden="true">
+                      <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">
                         ·
                       </span>
                       <span
                         className={
-                          currentDeltaPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                          currentDeltaPct >= 0
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-rose-700 dark:text-rose-400'
                         }
                       >
                         Desde ref: {formatPercent(currentDeltaPct)}
@@ -269,7 +273,7 @@ export function TriggersPanel({
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 font-mono tabular-nums">
+                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                   <span>
                     Modo: {trig.repeatMode === 'continuo' ? `Contínuo (${trig.cooldownMinutes}m cooldown)` : 'Disparo único'}
                   </span>
@@ -300,14 +304,14 @@ export function TriggersPanel({
                   {trig.lastDeliveryStatus === 'enviado' && (
                     <>
                       <span aria-hidden="true">·</span>
-                      <span className="text-emerald-400">WhatsApp enviado</span>
+                      <span className="text-emerald-700 dark:text-emerald-400">WhatsApp enviado</span>
                     </>
                   )}
                   {(trig.lastDeliveryStatus === 'falha' ||
                     trig.lastDeliveryStatus === 'sem_whatsapp') && (
                     <>
                       <span aria-hidden="true">·</span>
-                      <span className="text-amber-400">
+                      <span className="text-amber-700 dark:text-amber-400">
                         {trig.lastDeliveryError || 'WhatsApp não configurado'}
                       </span>
                     </>
@@ -315,7 +319,7 @@ export function TriggersPanel({
                 </div>
 
                 {trig.note && (
-                  <p className="text-xs text-slate-400">{trig.note}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">{trig.note}</p>
                 )}
               </div>
             );

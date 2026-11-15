@@ -267,19 +267,19 @@ export function AddTriggerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 dark:bg-black/75 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111827] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col"
+        className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/[0.07]">
           <div>
-            <h2 className="text-base font-semibold text-slate-100">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Novo Gatilho 24h (WhatsApp)
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
               Monitorado a cada 10 segundos no servidor para avisar no momento exato.
             </p>
           </div>
@@ -287,7 +287,7 @@ export function AddTriggerModal({
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+            className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -296,12 +296,12 @@ export function AddTriggerModal({
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
           {/* Selected coin & search */}
           <div className="space-y-2">
-            <label className="block text-xs font-medium text-slate-300">
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
               Criptomoeda
             </label>
 
             {selectedCoin && (
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-xs">
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-sky-300 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <CryptoLogo
                     symbol={selectedCoin.symbol}
@@ -309,10 +309,10 @@ export function AddTriggerModal({
                     name={selectedCoin.name}
                     size="sm"
                   />
-                  <span className="font-semibold text-slate-100">{selectedCoin.name}</span>
-                  <span className="font-mono text-sky-400">{selectedCoin.symbol}</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedCoin.name}</span>
+                  <span className="font-mono text-sky-700 dark:text-sky-400">{selectedCoin.symbol}</span>
                   {effectiveLiveUsd && (
-                    <span className="font-mono text-slate-400 tabular-nums">
+                    <span className="font-mono text-slate-600 dark:text-slate-400 tabular-nums">
                       · Atual {formatPrice(effectiveLiveUsd, currency, usdBrlRate)}
                     </span>
                   )}
@@ -323,7 +323,7 @@ export function AddTriggerModal({
                     setSelectedCoin(null);
                     setRefPriceInput('');
                   }}
-                  className="text-[11px] text-slate-400 hover:text-white"
+                  className="text-[11px] text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
                 >
                   Trocar
                 </button>
@@ -333,16 +333,16 @@ export function AddTriggerModal({
             {(!selectedCoin || coinSearch.length > 0) && (
               <div className="space-y-2">
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={coinSearch}
                     onChange={(e) => setCoinSearch(e.target.value)}
                     placeholder="Buscar moeda (ex: Solana, Bitcoin, XRP, ETH...)"
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
                   />
                   {searching && (
-                    <Loader2 className="w-3.5 h-3.5 text-sky-400 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                    <Loader2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
                   )}
                 </div>
 
@@ -353,7 +353,7 @@ export function AddTriggerModal({
                         key={w.id}
                         type="button"
                         onClick={() => void selectAsset(w)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-md border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-md border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-[#0B0F17] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors"
                       >
                         <CryptoLogo
                           symbol={w.symbol}
@@ -368,13 +368,13 @@ export function AddTriggerModal({
                 )}
 
                 {searchResults.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto rounded-lg border border-white/10 bg-[#0B0F17] divide-y divide-white/[0.06]">
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0B0F17] divide-y divide-slate-200 dark:divide-white/[0.06]">
                     {searchResults.map((c) => (
                       <button
                         key={c.id}
                         type="button"
                         onClick={() => void selectAsset(c)}
-                        className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-white/[0.04] transition-colors text-xs"
+                        className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-colors text-xs"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <CryptoLogo
@@ -383,8 +383,8 @@ export function AddTriggerModal({
                             name={c.name}
                             size="xs"
                           />
-                          <span className="font-mono font-bold text-slate-100">{c.symbol}</span>
-                          <span className="text-slate-400 truncate">{c.name}</span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{c.symbol}</span>
+                          <span className="text-slate-600 dark:text-slate-400 truncate">{c.name}</span>
                         </div>
                         {c.marketCapRank && (
                           <span className="font-mono text-[11px] text-slate-500">
@@ -401,10 +401,10 @@ export function AddTriggerModal({
 
           {/* Condition type */}
           <div className="space-y-2">
-            <label className="block text-xs font-medium text-slate-300">
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
               Regra do gatilho
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.08]">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.08]">
               {(
                 [
                   { id: 'queda_pct', label: 'Queda %' },
@@ -420,7 +420,7 @@ export function AddTriggerModal({
                   className={`py-1.5 px-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     conditionType === item.id
                       ? 'bg-sky-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   {item.label}
@@ -432,7 +432,7 @@ export function AddTriggerModal({
           {/* Target value & Reference price */}
           <div className={`grid gap-3 ${isPercentCondition ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
+              <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
                 {conditionType === 'queda_pct'
                   ? 'Avisar quando cair (%)'
                   : conditionType === 'alta_pct'
@@ -447,21 +447,21 @@ export function AddTriggerModal({
                 value={targetInput}
                 onChange={(e) => setTargetInput(e.target.value)}
                 placeholder={isPercentCondition ? 'Ex: 10' : 'Ex: 60,00'}
-                className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500 tabular-nums"
+                className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 tabular-nums"
               />
             </div>
 
             {isPercentCondition && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs text-slate-400">
+                  <label className="text-xs text-slate-700 dark:text-slate-400">
                     Preço base ({currency === 'BRL' ? 'R$' : 'US$'})
                   </label>
                   {effectiveLiveUsd && (
                     <button
                       type="button"
                       onClick={applyLiveRefPrice}
-                      className="text-[11px] text-sky-400 hover:text-sky-300"
+                      className="text-[11px] text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300"
                     >
                       Usar atual
                     </button>
@@ -476,16 +476,16 @@ export function AddTriggerModal({
                     setRefPriceInput(e.target.value);
                   }}
                   placeholder="Preço atual"
-                  className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500 tabular-nums"
+                  className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 tabular-nums"
                 />
               </div>
             )}
           </div>
 
           {estimatedTriggerPriceUsd && estimatedTriggerPriceUsd > 0 && (
-            <div className="rounded-lg border border-white/[0.07] bg-[#0B0F17] px-3.5 py-2.5 flex items-center justify-between text-xs">
-              <span className="text-slate-400">Disparo automático estimado em</span>
-              <span className="font-mono font-semibold text-sky-400 tabular-nums">
+            <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] px-3.5 py-2.5 flex items-center justify-between text-xs">
+              <span className="text-slate-600 dark:text-slate-400">Disparo automático estimado em</span>
+              <span className="font-mono font-semibold text-sky-700 dark:text-sky-400 tabular-nums">
                 {formatPrice(estimatedTriggerPriceUsd, currency, usdBrlRate)}
               </span>
             </div>
@@ -494,10 +494,10 @@ export function AddTriggerModal({
           {/* Action hint & Repeat mode */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
+              <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
                 Finalidade do alerta
               </label>
-              <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.08]">
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.08]">
                 {(['COMPRAR', 'VENDER', 'AVALIAR'] as const).map((hint) => (
                   <button
                     key={hint}
@@ -510,7 +510,7 @@ export function AddTriggerModal({
                           : hint === 'VENDER'
                           ? 'bg-rose-600 text-white'
                           : 'bg-amber-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     {hint}
@@ -520,17 +520,17 @@ export function AddTriggerModal({
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
+              <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
                 Frequência de disparo
               </label>
-              <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.08]">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.08]">
                 <button
                   type="button"
                   onClick={() => setRepeatMode('continuo')}
                   className={`py-1.5 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
                     repeatMode === 'continuo'
                       ? 'bg-sky-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Contínuo 24h
@@ -541,7 +541,7 @@ export function AddTriggerModal({
                   className={`py-1.5 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
                     repeatMode === 'uma_vez'
                       ? 'bg-sky-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Uma vez
@@ -552,7 +552,7 @@ export function AddTriggerModal({
 
           {repeatMode === 'continuo' && (
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
+              <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
                 Intervalo mínimo entre disparos repetidos (minutos)
               </label>
               <input
@@ -561,13 +561,13 @@ export function AddTriggerModal({
                 max={1440}
                 value={cooldownMinutes}
                 onChange={(e) => setCooldownMinutes(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 focus:outline-none focus:border-sky-500 tabular-nums"
+                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 tabular-nums"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
               Observação opcional na mensagem do WhatsApp
             </label>
             <input
@@ -576,30 +576,30 @@ export function AddTriggerModal({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ex: Hora de aportar na queda"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-white/10 bg-[#0B0F17] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
           </div>
 
-          <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-white/[0.07] bg-[#0B0F17] cursor-pointer">
-            <span className="text-xs text-slate-200">
+          <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] cursor-pointer">
+            <span className="text-xs text-slate-800 dark:text-slate-200">
               Enviar automaticamente para meu WhatsApp
             </span>
             <input
               type="checkbox"
               checked={sendWhatsApp}
               onChange={(e) => setSendWhatsApp(e.target.checked)}
-              className="w-4 h-4 accent-emerald-500 cursor-pointer"
+              className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 cursor-pointer"
             />
           </label>
 
           {sendWhatsApp && !whatsappEnabled && (
-            <p className="text-[11px] text-amber-400">
+            <p className="text-[11px] text-amber-700 dark:text-amber-400">
               Lembrete: ative e conecte seu número na aba Alertas → Configurar WhatsApp 24h para receber as mensagens automaticamente.
             </p>
           )}
 
           {error && (
-            <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/25 rounded-lg px-3 py-2">
+            <p className="text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/25 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -608,7 +608,7 @@ export function AddTriggerModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium rounded-lg border border-white/10 text-slate-300 hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               Cancelar
             </button>

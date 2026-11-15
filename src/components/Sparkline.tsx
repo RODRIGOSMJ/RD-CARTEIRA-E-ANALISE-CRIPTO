@@ -5,7 +5,7 @@ interface SparklineProps {
 
 export function Sparkline({ data, positive }: SparklineProps) {
   if (!data || data.length < 2) {
-    return <div className="w-20 h-7 bg-slate-900/40 rounded" />;
+    return <div className="w-20 h-7 bg-slate-200 dark:bg-slate-900/40 rounded" />;
   }
 
   const w = 84;
@@ -32,8 +32,8 @@ export function Sparkline({ data, positive }: SparklineProps) {
     >
       <polyline
         fill="none"
-        stroke={positive ? '#10B981' : '#EF4444'}
-        strokeWidth="1.6"
+        stroke={positive ? '#059669' : '#DC2626'}
+        strokeWidth="1.7"
         strokeLinecap="round"
         strokeLinejoin="round"
         points={points}

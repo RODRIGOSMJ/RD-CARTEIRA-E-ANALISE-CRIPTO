@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -6,11 +7,47 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+:root {
+  color-scheme: light;
+  --app-bg: #F8FAFC;
+  --app-fg: #0F172A;
+  --chart-grid: rgba(100, 116, 139, 0.22);
+  --chart-axis: rgba(51, 65, 85, 0.78);
+  --chart-zero: rgba(71, 85, 105, 0.45);
+  --chart-bb: rgba(100, 116, 139, 0.48);
+  --chart-crosshair: rgba(15, 23, 42, 0.35);
+  --chart-dot-stroke: #FFFFFF;
+  --chart-target-text: #047857;
+  --chart-stop-text: #B91C1C;
+  --chart-ema9: #0284C7;
+  --chart-ema21: #D97706;
+  --scrollbar-thumb: rgba(100, 116, 139, 0.32);
+  --scrollbar-thumb-hover: rgba(71, 85, 105, 0.5);
+}
+
+.dark {
+  color-scheme: dark;
+  --app-bg: #0B0F17;
+  --app-fg: #F1F5F9;
+  --chart-grid: rgba(148, 163, 184, 0.1);
+  --chart-axis: rgba(148, 163, 184, 0.55);
+  --chart-zero: rgba(148, 163, 184, 0.22);
+  --chart-bb: rgba(148, 163, 184, 0.28);
+  --chart-crosshair: rgba(241, 245, 249, 0.25);
+  --chart-dot-stroke: #0B0F17;
+  --chart-target-text: #34D399;
+  --chart-stop-text: #F87171;
+  --chart-ema9: #38BDF8;
+  --chart-ema21: #F59E0B;
+  --scrollbar-thumb: rgba(148, 163, 184, 0.2);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.35);
+}
+
 @layer base {
   body {
     font-family: var(--font-sans);
-    background-color: #0B0F17;
-    color: #F1F5F9;
+    background-color: var(--app-bg);
+    color: var(--app-fg);
     letter-spacing: 0.005em;
   }
 
@@ -34,10 +71,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.35);
+  background: var(--scrollbar-thumb-hover);
 }

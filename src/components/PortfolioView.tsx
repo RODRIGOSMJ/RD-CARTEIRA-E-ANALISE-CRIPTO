@@ -245,32 +245,34 @@ export function PortfolioView({
                 onBlur={savePortfolioName}
                 onKeyDown={(e) => e.key === 'Enter' && savePortfolioName()}
                 autoFocus
-                className="px-2 py-0.5 text-xs font-semibold rounded border border-sky-500 bg-[#0B0F17] text-slate-100 focus:outline-none"
+                className="px-2 py-0.5 text-xs font-semibold rounded border border-sky-500 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none"
               />
             ) : (
               <button
                 type="button"
                 onClick={() => setEditingName(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition-colors"
                 title="Clique para renomear a carteira"
               >
                 <span>{portfolio.name}</span>
-                <Pencil className="w-3 h-3 text-slate-500" />
+                <Pencil className="w-3 h-3 text-slate-400 dark:text-slate-500" />
               </button>
             )}
-            <span className="text-xs text-slate-500" aria-hidden="true">
+            <span className="text-xs text-slate-400 dark:text-slate-500" aria-hidden="true">
               ·
             </span>
-            <span className="text-xs text-slate-400">Carteira principal</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400">Carteira principal</span>
           </div>
 
           <div className="flex flex-wrap items-baseline gap-3">
-            <span className="text-3xl font-mono font-bold text-slate-100 tabular-nums">
+            <span className="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
               {maskValue(formatCurrencyValue(portfolio.totalValueUsd, currency, usdBrlRate))}
             </span>
             <span
               className={`inline-flex items-center gap-1 text-sm font-mono font-semibold tabular-nums ${
-                portfolio.change24hPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                portfolio.change24hPct >= 0
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-rose-700 dark:text-rose-400'
               }`}
             >
               {portfolio.change24hPct >= 0 ? (
@@ -283,7 +285,7 @@ export function PortfolioView({
             <button
               type="button"
               onClick={() => setHideBalances((v) => !v)}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-colors"
+              className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/70 dark:hover:bg-white/5 transition-colors"
               aria-label={hideBalances ? 'Mostrar saldos' : 'Ocultar saldos'}
             >
               {hideBalances ? (
@@ -309,7 +311,7 @@ export function PortfolioView({
             <button
               type="button"
               onClick={handleExportCsv}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-white/10 bg-[#111827] hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors whitespace-nowrap shrink-0"
             >
               <Download className="w-3.5 h-3.5" />
               Exportar
@@ -319,13 +321,13 @@ export function PortfolioView({
       </section>
 
       {!hasAnyHistory ? (
-        <section className="rounded-xl border border-white/[0.08] bg-[#111827] p-10 text-center space-y-4">
-          <Wallet className="w-8 h-8 text-sky-400 mx-auto" />
+        <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-10 text-center space-y-4">
+          <Wallet className="w-8 h-8 text-sky-600 dark:text-sky-400 mx-auto" />
           <div className="max-w-md mx-auto space-y-1.5">
-            <h2 className="text-base font-semibold text-slate-100">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Monte sua carteira para o robô estudar junto com você
             </h2>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               Adicione suas compras, vendas ou ganhos de staking/airdrop. O SinalCripto IA calculará seu preço médio, lucro real e passará a indicar quando realizar lucro ou segurar com base na sua posição.
             </p>
           </div>
@@ -343,13 +345,13 @@ export function PortfolioView({
           {/* 2-Card Chart Row: Holdings (8 cols) + Performance vs BTC (4 cols) */}
           <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             {/* Holdings Card */}
-            <div className="xl:col-span-8 rounded-xl border border-white/[0.08] bg-[#111827] p-5 space-y-4">
+            <div className="xl:col-span-8 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-slate-100">Patrimônio</h2>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Patrimônio</h2>
 
                 <div className="flex flex-wrap items-center gap-2">
                   {chartMode === 'history' && (
-                    <div className="flex items-center gap-1 rounded-lg bg-[#0B0F17] p-0.5 border border-white/[0.07]">
+                    <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-0.5 border border-slate-200 dark:border-white/[0.07]">
                       {(['24h', '7d', '30d', '90d', 'all'] as const).map((r) => (
                         <button
                           key={r}
@@ -357,8 +359,8 @@ export function PortfolioView({
                           onClick={() => setChartRange(r)}
                           className={`px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-colors whitespace-nowrap ${
                             chartRange === r
-                              ? 'bg-slate-800 text-slate-100'
-                              : 'text-slate-400 hover:text-slate-200'
+                              ? 'bg-white text-slate-900 shadow-xs dark:shadow-none dark:bg-slate-800 dark:text-slate-100'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                           }`}
                         >
                           {r === 'all' ? 'Tudo' : r.toUpperCase()}
@@ -367,14 +369,14 @@ export function PortfolioView({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1 rounded-lg bg-[#0B0F17] p-0.5 border border-white/[0.07]">
+                  <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-0.5 border border-slate-200 dark:border-white/[0.07]">
                     <button
                       type="button"
                       onClick={() => setChartMode('history')}
                       className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
                         chartMode === 'history'
                           ? 'bg-sky-600 text-white'
-                          : 'text-slate-400 hover:text-slate-200'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       Histórico
@@ -385,7 +387,7 @@ export function PortfolioView({
                       className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
                         chartMode === 'allocation'
                           ? 'bg-sky-600 text-white'
-                          : 'text-slate-400 hover:text-slate-200'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       Alocação
@@ -397,7 +399,7 @@ export function PortfolioView({
               {chartMode === 'allocation' ? (
                 <div className="space-y-3 py-2">
                   {activeHoldings.length === 0 ? (
-                    <p className="text-xs text-slate-400 py-8 text-center">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 py-8 text-center">
                       Nenhum saldo positivo em carteira no momento.
                     </p>
                   ) : (
@@ -418,21 +420,21 @@ export function PortfolioView({
                               name={h.name}
                               size="xs"
                             />
-                            <span className="font-mono font-semibold text-slate-100">
+                            <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                               {h.symbol}
                             </span>
-                            <span className="text-slate-400">{h.name}</span>
+                            <span className="text-slate-600 dark:text-slate-400">{h.name}</span>
                           </div>
-                          <div className="font-mono tabular-nums text-slate-200">
+                          <div className="font-mono tabular-nums text-slate-800 dark:text-slate-200">
                             {maskValue(
                               formatPrice(h.currentValueUsd, currency, usdBrlRate)
                             )}{' '}
-                            <span className="text-slate-400">
+                            <span className="text-slate-500 dark:text-slate-400">
                               ({h.allocationPct.toFixed(1)}%)
                             </span>
                           </div>
                         </div>
-                        <div className="h-2 rounded-full bg-[#0B0F17] overflow-hidden">
+                        <div className="h-2 rounded-full bg-slate-200 dark:bg-[#0B0F17] overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
                             style={{
@@ -447,10 +449,10 @@ export function PortfolioView({
                   )}
                 </div>
               ) : historyLoading ? (
-                <div className="h-[230px] rounded-lg bg-[#0B0F17] animate-pulse" />
+                <div className="h-[230px] rounded-lg bg-slate-200/70 dark:bg-[#0B0F17] animate-pulse" />
               ) : holdingsGeo ? (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono tabular-nums text-slate-400">
+                  <div className="flex items-center justify-between text-xs font-mono tabular-nums text-slate-600 dark:text-slate-400">
                     <span>
                       {hoverIdx !== null && historyPoints[hoverIdx]
                         ? new Date(historyPoints[hoverIdx].timestamp).toLocaleString(
@@ -464,7 +466,7 @@ export function PortfolioView({
                           )
                         : 'Evolução estimada da posição atual'}
                     </span>
-                    <span className="text-slate-100 font-semibold">
+                    <span className="text-slate-900 dark:text-slate-100 font-semibold">
                       {hoverIdx !== null && historyPoints[hoverIdx]
                         ? maskValue(
                             formatPrice(
@@ -479,7 +481,7 @@ export function PortfolioView({
                     </span>
                   </div>
 
-                  <div className="relative h-[230px] rounded-lg border border-white/[0.06] bg-[#0B0F17] overflow-hidden">
+                  <div className="relative h-[230px] rounded-lg border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-[#0B0F17] overflow-hidden">
                     <svg
                       viewBox={`0 0 ${holdingsGeo.w} ${holdingsGeo.h}`}
                       className="w-full h-full select-none"
@@ -500,7 +502,7 @@ export function PortfolioView({
                           <stop
                             offset="0%"
                             stopColor={holdingsGeo.isPositive ? '#10B981' : '#EF4444'}
-                            stopOpacity="0.28"
+                            stopOpacity="0.25"
                           />
                           <stop
                             offset="100%"
@@ -521,14 +523,14 @@ export function PortfolioView({
                               y1={y}
                               x2={holdingsGeo.w - holdingsGeo.padX}
                               y2={y}
-                              stroke="rgba(148,163,184,0.1)"
+                              stroke="var(--chart-grid)"
                               strokeDasharray="3 4"
                             />
                             <text
                               x={holdingsGeo.w - holdingsGeo.padX - 4}
                               y={y - 4}
                               textAnchor="end"
-                              fill="rgba(148,163,184,0.55)"
+                              fill="var(--chart-axis)"
                               fontSize="10"
                               fontFamily="JetBrains Mono, monospace"
                             >
@@ -544,7 +546,7 @@ export function PortfolioView({
                       <path
                         d={holdingsGeo.linePath}
                         fill="none"
-                        stroke={holdingsGeo.isPositive ? '#10B981' : '#EF4444'}
+                        stroke={holdingsGeo.isPositive ? '#059669' : '#DC2626'}
                         strokeWidth="2"
                       />
 
@@ -555,14 +557,14 @@ export function PortfolioView({
                             y1={holdingsGeo.padY}
                             x2={holdingsGeo.toX(hoverIdx)}
                             y2={holdingsGeo.padY + holdingsGeo.plotH}
-                            stroke="rgba(241,245,249,0.25)"
+                            stroke="var(--chart-crosshair)"
                           />
                           <circle
                             cx={holdingsGeo.toX(hoverIdx)}
                             cy={holdingsGeo.toY(historyPoints[hoverIdx].totalValueUsd)}
                             r="4"
-                            fill={holdingsGeo.isPositive ? '#10B981' : '#EF4444'}
-                            stroke="#0B0F17"
+                            fill={holdingsGeo.isPositive ? '#059669' : '#DC2626'}
+                            stroke="var(--chart-dot-stroke)"
                             strokeWidth="1.5"
                           />
                         </g>
@@ -571,23 +573,23 @@ export function PortfolioView({
                   </div>
                 </div>
               ) : (
-                <div className="h-[230px] rounded-lg border border-white/[0.06] bg-[#0B0F17] flex items-center justify-center text-xs text-slate-400">
+                <div className="h-[230px] rounded-lg border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-[#0B0F17] flex items-center justify-center text-xs text-slate-600 dark:text-slate-400">
                   Histórico em processamento para os ativos da carteira.
                 </div>
               )}
             </div>
 
             {/* Performance vs BTC Card */}
-            <div className="xl:col-span-4 rounded-xl border border-white/[0.08] bg-[#111827] p-5 space-y-4">
+            <div className="xl:col-span-4 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5 space-y-4">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-100">Desempenho</h2>
-                <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Desempenho</h2>
+                <div className="flex items-center gap-3 text-[11px] text-slate-600 dark:text-slate-400">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-sky-400" />
+                    <span className="w-2 h-2 rounded-full bg-sky-600 dark:bg-sky-400" />
                     Sua carteira
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <span className="w-2 h-2 rounded-full bg-amber-600 dark:bg-amber-400" />
                     BTC
                   </span>
                 </div>
@@ -596,7 +598,7 @@ export function PortfolioView({
               {perfGeo ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-mono tabular-nums">
-                    <span className="text-sky-400">
+                    <span className="text-sky-700 dark:text-sky-400">
                       Carteira:{' '}
                       {formatPercent(
                         perfHoverIdx !== null && historyPoints[perfHoverIdx]
@@ -604,7 +606,7 @@ export function PortfolioView({
                           : portfolio.allTimeProfitPct
                       )}
                     </span>
-                    <span className="text-amber-400">
+                    <span className="text-amber-700 dark:text-amber-400">
                       BTC:{' '}
                       {formatPercent(
                         perfHoverIdx !== null && historyPoints[perfHoverIdx]
@@ -614,7 +616,7 @@ export function PortfolioView({
                     </span>
                   </div>
 
-                  <div className="relative h-[230px] rounded-lg border border-white/[0.06] bg-[#0B0F17] overflow-hidden">
+                  <div className="relative h-[230px] rounded-lg border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-[#0B0F17] overflow-hidden">
                     <svg
                       viewBox={`0 0 ${perfGeo.w} ${perfGeo.h}`}
                       className="w-full h-full select-none"
@@ -634,14 +636,14 @@ export function PortfolioView({
                         y1={perfGeo.zeroY}
                         x2={perfGeo.w - perfGeo.padX}
                         y2={perfGeo.zeroY}
-                        stroke="rgba(148,163,184,0.22)"
+                        stroke="var(--chart-zero)"
                         strokeDasharray="3 3"
                       />
                       <text
                         x={perfGeo.w - perfGeo.padX - 4}
                         y={perfGeo.zeroY - 4}
                         textAnchor="end"
-                        fill="rgba(148,163,184,0.6)"
+                        fill="var(--chart-axis)"
                         fontSize="10"
                         fontFamily="JetBrains Mono, monospace"
                       >
@@ -651,13 +653,13 @@ export function PortfolioView({
                       <path
                         d={perfGeo.btcPath}
                         fill="none"
-                        stroke="#F59E0B"
+                        stroke="var(--chart-ema21)"
                         strokeWidth="1.75"
                       />
                       <path
                         d={perfGeo.profitPath}
                         fill="none"
-                        stroke="#38BDF8"
+                        stroke="var(--chart-ema9)"
                         strokeWidth="2"
                       />
 
@@ -667,14 +669,14 @@ export function PortfolioView({
                           y1={perfGeo.padY}
                           x2={perfGeo.toX(perfHoverIdx)}
                           y2={perfGeo.padY + perfGeo.plotH}
-                          stroke="rgba(241,245,249,0.25)"
+                          stroke="var(--chart-crosshair)"
                         />
                       )}
                     </svg>
                   </div>
                 </div>
               ) : (
-                <div className="h-[230px] rounded-lg border border-white/[0.06] bg-[#0B0F17] flex items-center justify-center text-xs text-slate-400">
+                <div className="h-[230px] rounded-lg border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-[#0B0F17] flex items-center justify-center text-xs text-slate-600 dark:text-slate-400">
                   Comparativo disponível após carregamento do histórico.
                 </div>
               )}
@@ -683,11 +685,13 @@ export function PortfolioView({
 
           {/* 3-Card KPI Strip mirroring All-time profit | Cost Basis | Best & Worst Performer */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-5">
-              <span className="block text-xs text-slate-400">Lucro total acumulado</span>
+            <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5">
+              <span className="block text-xs text-slate-600 dark:text-slate-400">Lucro total acumulado</span>
               <div
                 className={`mt-2 text-2xl font-mono font-bold tabular-nums ${
-                  portfolio.allTimeProfitUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  portfolio.allTimeProfitUsd >= 0
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-rose-700 dark:text-rose-400'
                 }`}
               >
                 {maskValue(
@@ -696,31 +700,33 @@ export function PortfolioView({
               </div>
               <span
                 className={`mt-1 inline-block text-xs font-mono tabular-nums ${
-                  portfolio.allTimeProfitPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  portfolio.allTimeProfitPct >= 0
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-rose-700 dark:text-rose-400'
                 }`}
               >
                 {formatPercent(portfolio.allTimeProfitPct)}
               </span>
             </div>
 
-            <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-5">
-              <span className="block text-xs text-slate-400">
+            <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5">
+              <span className="block text-xs text-slate-600 dark:text-slate-400">
                 Custo base investido
               </span>
-              <div className="mt-2 text-2xl font-mono font-bold text-slate-100 tabular-nums">
+              <div className="mt-2 text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                 {maskValue(formatCurrencyValue(portfolio.totalCostBasisUsd, currency, usdBrlRate))}
               </div>
-              <span className="mt-1 inline-block text-xs text-slate-400 font-mono tabular-nums">
+              <span className="mt-1 inline-block text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                 {portfolio.transactions.length} transações registradas
               </span>
             </div>
 
-            <div className="rounded-xl border border-white/[0.08] bg-[#111827] p-5 grid grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5 grid grid-cols-2 gap-4">
               <div className="min-w-0">
-                <span className="block text-xs text-slate-400">Melhor ativo</span>
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Melhor ativo</span>
                 {portfolio.bestPerformer ? (
                   <div className="mt-2 space-y-0.5">
-                    <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-100 truncate">
+                    <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-900 dark:text-slate-100 truncate">
                       <CryptoLogo
                         symbol={portfolio.bestPerformer.symbol}
                         coinId={portfolio.bestPerformer.coinId}
@@ -732,8 +738,8 @@ export function PortfolioView({
                     <div
                       className={`text-xs font-mono tabular-nums ${
                         portfolio.bestPerformer.totalPnlUsd >= 0
-                          ? 'text-emerald-400'
-                          : 'text-rose-400'
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-rose-700 dark:text-rose-400'
                       }`}
                     >
                       {maskValue(
@@ -751,11 +757,11 @@ export function PortfolioView({
                 )}
               </div>
 
-              <div className="min-w-0 border-l border-white/[0.07] pl-4">
-                <span className="block text-xs text-slate-400">Pior ativo</span>
+              <div className="min-w-0 border-l border-slate-200 dark:border-white/[0.07] pl-4">
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Pior ativo</span>
                 {portfolio.worstPerformer ? (
                   <div className="mt-2 space-y-0.5">
-                    <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-100 truncate">
+                    <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-900 dark:text-slate-100 truncate">
                       <CryptoLogo
                         symbol={portfolio.worstPerformer.symbol}
                         coinId={portfolio.worstPerformer.coinId}
@@ -767,8 +773,8 @@ export function PortfolioView({
                     <div
                       className={`text-xs font-mono tabular-nums ${
                         portfolio.worstPerformer.totalPnlUsd >= 0
-                          ? 'text-emerald-400'
-                          : 'text-rose-400'
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-rose-700 dark:text-rose-400'
                       }`}
                     >
                       {maskValue(
@@ -789,16 +795,16 @@ export function PortfolioView({
           </section>
 
           {/* Bottom Sub-Tabs: Ativos | Transações */}
-          <section className="rounded-xl border border-white/[0.08] bg-[#111827] overflow-hidden">
-            <div className="px-5 py-3 border-b border-white/[0.07] flex items-center justify-between gap-4">
-              <div className="flex items-center gap-1 rounded-lg bg-[#0B0F17] p-1 border border-white/[0.07]">
+          <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-4">
+              <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
                 <button
                   type="button"
                   onClick={() => setSubTab('assets')}
                   className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     subTab === 'assets'
                       ? 'bg-sky-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Ativos ({portfolio.holdings.length})
@@ -809,7 +815,7 @@ export function PortfolioView({
                   className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     subTab === 'transactions'
                       ? 'bg-sky-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Transações ({portfolio.transactions.length})
@@ -820,7 +826,7 @@ export function PortfolioView({
                 <button
                   type="button"
                   onClick={() => void onClearTransactions()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-500/25 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 dark:border-rose-500/25 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors whitespace-nowrap shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Limpar histórico
@@ -832,7 +838,7 @@ export function PortfolioView({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-white/[0.06] text-[11px] font-medium text-slate-400">
+                    <tr className="border-b border-slate-200 dark:border-white/[0.06] text-[11px] font-medium text-slate-600 dark:text-slate-400">
                       <th className="py-3 px-5">Nome</th>
                       <th className="py-3 px-3 text-right">Preço</th>
                       <th className="py-3 px-3 text-right hidden md:table-cell">1h%</th>
@@ -845,14 +851,14 @@ export function PortfolioView({
                       <th className="py-3 px-5 text-right">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.05] text-xs">
+                  <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-xs">
                     {portfolio.holdings.map((h) => {
                       const snap = snapshots[h.coinId];
                       const analysis = analyses[h.coinId];
                       return (
                         <tr
                           key={h.coinId}
-                          className="hover:bg-white/[0.025] transition-colors"
+                          className="hover:bg-slate-50 dark:hover:bg-white/[0.025] transition-colors"
                         >
                           <td className="py-3.5 px-5">
                             <button
@@ -867,25 +873,25 @@ export function PortfolioView({
                                   name={h.name}
                                   size="sm"
                                 />
-                                <span className="font-semibold text-slate-100 group-hover:text-sky-400 transition-colors">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-sky-700 dark:group-hover:text-sky-400 transition-colors">
                                   {h.name}
                                 </span>
-                                <span className="font-mono text-slate-400">
+                                <span className="font-mono text-slate-500 dark:text-slate-400">
                                   {h.symbol}
                                 </span>
                               </div>
                             </button>
                           </td>
 
-                          <td className="py-3.5 px-3 text-right font-mono text-slate-100 tabular-nums whitespace-nowrap">
+                          <td className="py-3.5 px-3 text-right font-mono text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
                             {formatPrice(h.currentPriceUsd, currency, usdBrlRate)}
                           </td>
 
                           <td
                             className={`py-3.5 px-3 text-right font-mono tabular-nums hidden md:table-cell whitespace-nowrap ${
                               (snap?.change1hPct ?? 0) >= 0
-                                ? 'text-emerald-400'
-                                : 'text-rose-400'
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : 'text-rose-700 dark:text-rose-400'
                             }`}
                           >
                             {snap?.change1hPct !== undefined
@@ -896,8 +902,8 @@ export function PortfolioView({
                           <td
                             className={`py-3.5 px-3 text-right font-mono tabular-nums whitespace-nowrap ${
                               (snap?.change24hPct ?? 0) >= 0
-                                ? 'text-emerald-400'
-                                : 'text-rose-400'
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : 'text-rose-700 dark:text-rose-400'
                             }`}
                           >
                             {snap ? formatPercent(snap.change24hPct) : '—'}
@@ -906,20 +912,20 @@ export function PortfolioView({
                           <td
                             className={`py-3.5 px-3 text-right font-mono tabular-nums hidden sm:table-cell whitespace-nowrap ${
                               (snap?.change7dPct ?? 0) >= 0
-                                ? 'text-emerald-400'
-                                : 'text-rose-400'
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : 'text-rose-700 dark:text-rose-400'
                             }`}
                           >
                             {snap ? formatPercent(snap.change7dPct) : '—'}
                           </td>
 
                           <td className="py-3.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
-                            <div className="font-semibold text-slate-100">
+                            <div className="font-semibold text-slate-900 dark:text-slate-100">
                               {maskValue(
                                 formatCurrencyValue(h.currentValueUsd, currency, usdBrlRate)
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">
                               {hideBalances
                                 ? '••••'
                                 : `${h.quantity.toLocaleString('pt-BR', {
@@ -928,7 +934,7 @@ export function PortfolioView({
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-3 text-right font-mono text-slate-300 tabular-nums whitespace-nowrap">
+                          <td className="py-3.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">
                             {h.avgBuyPriceUsd > 0
                               ? formatPrice(h.avgBuyPriceUsd, currency, usdBrlRate)
                               : 'Ganho (R$ 0)'}
@@ -937,7 +943,9 @@ export function PortfolioView({
                           <td className="py-3.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                             <div
                               className={`font-semibold ${
-                                h.totalPnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                h.totalPnlUsd >= 0
+                                  ? 'text-emerald-700 dark:text-emerald-400'
+                                  : 'text-rose-700 dark:text-rose-400'
                               }`}
                             >
                               {maskValue(
@@ -950,7 +958,9 @@ export function PortfolioView({
                             </div>
                             <div
                               className={`text-[11px] ${
-                                h.totalPnlPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                h.totalPnlPct >= 0
+                                  ? 'text-emerald-700 dark:text-emerald-400'
+                                  : 'text-rose-700 dark:text-rose-400'
                               }`}
                             >
                               {formatPercent(h.totalPnlPct)}
@@ -973,7 +983,7 @@ export function PortfolioView({
                                 type="button"
                                 onClick={() => onOpenCreateTrigger(h.coinId)}
                                 title={`Criar gatilho WhatsApp 24h em ${h.symbol}`}
-                                className="p-1.5 rounded-md border border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition-colors"
+                                className="p-1.5 rounded-md border border-emerald-300 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 transition-colors"
                               >
                                 <BellRing className="w-3.5 h-3.5" />
                               </button>
@@ -981,14 +991,14 @@ export function PortfolioView({
                                 type="button"
                                 onClick={() => onOpenAddTransaction(h.coinId)}
                                 title={`Nova transação em ${h.symbol}`}
-                                className="p-1.5 rounded-md border border-white/10 hover:bg-slate-800 text-slate-200 transition-colors"
+                                className="p-1.5 rounded-md border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onSelectAssetForAI(h.coinId)}
-                                className="px-2.5 py-1 text-[11px] rounded-md border border-white/10 hover:bg-slate-800 text-slate-300 transition-colors"
+                                className="px-2.5 py-1 text-[11px] rounded-md border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
                               >
                                 Ver IA
                               </button>
@@ -997,7 +1007,7 @@ export function PortfolioView({
                                 onClick={() => void onDeleteCoinHistory(h.coinId)}
                                 title={`Excluir ${h.symbol} e todo o histórico da carteira`}
                                 aria-label={`Excluir histórico de ${h.symbol}`}
-                                className="p-1.5 rounded-md border border-white/10 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+                                className="p-1.5 rounded-md border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-500/30 transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1013,7 +1023,7 @@ export function PortfolioView({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-white/[0.06] text-[11px] font-medium text-slate-400">
+                    <tr className="border-b border-slate-200 dark:border-white/[0.06] text-[11px] font-medium text-slate-600 dark:text-slate-400">
                       <th className="py-3 px-5">Data</th>
                       <th className="py-3 px-3">Tipo</th>
                       <th className="py-3 px-3">Ativo</th>
@@ -1024,15 +1034,15 @@ export function PortfolioView({
                       <th className="py-3 px-5 text-right">Remover</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.05] text-xs">
+                  <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-xs">
                     {portfolio.transactions.map((tx) => {
                       const totalUsd =
                         tx.type === 'ganho'
                           ? 0
                           : tx.quantity * tx.pricePerCoinUsd + tx.feeUsd;
                       return (
-                        <tr key={tx.id} className="hover:bg-white/[0.02]">
-                          <td className="py-3 px-5 font-mono text-slate-400 tabular-nums whitespace-nowrap">
+                        <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                          <td className="py-3 px-5 font-mono text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">
                             {new Date(tx.timestamp).toLocaleString('pt-BR', {
                               day: '2-digit',
                               month: '2-digit',
@@ -1045,16 +1055,16 @@ export function PortfolioView({
                             <span
                               className={`font-mono font-semibold uppercase text-[11px] ${
                                 tx.type === 'compra'
-                                  ? 'text-emerald-400'
+                                  ? 'text-emerald-700 dark:text-emerald-400'
                                   : tx.type === 'venda'
-                                  ? 'text-rose-400'
-                                  : 'text-sky-400'
+                                  ? 'text-rose-700 dark:text-rose-400'
+                                  : 'text-sky-700 dark:text-sky-400'
                               }`}
                             >
                               {tx.type}
                             </span>
                           </td>
-                          <td className="py-3 px-3 font-medium text-slate-200">
+                          <td className="py-3 px-3 font-medium text-slate-900 dark:text-slate-200">
                             <div className="flex items-center gap-2">
                               <CryptoLogo
                                 symbol={tx.symbol}
@@ -1063,32 +1073,32 @@ export function PortfolioView({
                                 size="xs"
                               />
                               <span className="font-mono font-bold">{tx.symbol}</span>
-                              <span className="text-slate-400">{tx.name}</span>
+                              <span className="text-slate-600 dark:text-slate-400">{tx.name}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-right font-mono text-slate-200 tabular-nums">
+                          <td className="py-3 px-3 text-right font-mono text-slate-900 dark:text-slate-200 tabular-nums">
                             {hideBalances
                               ? '••••'
                               : tx.quantity.toLocaleString('pt-BR', {
                                   maximumFractionDigits: 6,
                                 })}
                           </td>
-                          <td className="py-3 px-3 text-right font-mono text-slate-300 tabular-nums">
+                          <td className="py-3 px-3 text-right font-mono text-slate-700 dark:text-slate-300 tabular-nums">
                             {tx.type === 'ganho'
                               ? 'Ganho'
                               : formatPrice(tx.pricePerCoinUsd, currency, usdBrlRate)}
                           </td>
-                          <td className="py-3 px-3 text-right font-mono font-semibold text-slate-100 tabular-nums">
+                          <td className="py-3 px-3 text-right font-mono font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
                             {maskValue(formatCurrencyValue(totalUsd, currency, usdBrlRate))}
                           </td>
-                          <td className="py-3 px-3 text-slate-400 max-w-[160px] truncate">
+                          <td className="py-3 px-3 text-slate-600 dark:text-slate-400 max-w-[160px] truncate">
                             {tx.note || '—'}
                           </td>
                           <td className="py-3 px-5 text-right">
                             <button
                               type="button"
                               onClick={() => onDeleteTransaction(tx.id)}
-                              className="p-1.5 rounded text-slate-400 hover:text-rose-400 transition-colors"
+                              className="p-1.5 rounded text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
                               aria-label="Excluir transação"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

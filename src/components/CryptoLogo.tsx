@@ -320,7 +320,7 @@ export function CryptoLogo({
 
   return (
     <span
-      className={`relative inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 select-none ${SIZE_CLASSES[size]} ${className}`}
+      className={`relative inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 select-none ring-1 ring-slate-900/10 dark:ring-white/10 ${SIZE_CLASSES[size]} ${className}`}
       title={name ? `${name} (${upper})` : upper}
     >
       {/* Crisp vector emblem shown immediately & whenever external CDN fails or is offline */}
