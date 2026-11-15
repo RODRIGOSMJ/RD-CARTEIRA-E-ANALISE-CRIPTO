@@ -55,8 +55,8 @@
       "createdAt": "2026-11-15T00:51:38.911Z",
       "read": false,
       "outcome": "em_aberto",
-      "evaluatedReturnPct": -0.49,
-      "evaluatedAt": "2026-11-15T01:20:13.722Z"
+      "evaluatedReturnPct": -1.82,
+      "evaluatedAt": "2026-11-15T01:31:12.171Z"
     },
     {
       "id": "alert_solana_1794700752736_35h1",
@@ -73,9 +73,9 @@
       "reason": "Apesar da tendência de baixa nas EMAs (9, 21 e 50) e do MACD negativo, o RSI 14 em 26,56 e a Banda de Bollinger %B em 12,1% indicam sobrevenda acentuada junto ao suporte de US$ 69,13. O repique de 1,65% na última hora com momentum de volume em 212,7% sugere absorção vendedora e potencial de recuperação técnica até a média de Bollinger em US$ 73,71.",
       "createdAt": "2026-11-14T23:59:12.736Z",
       "read": false,
-      "outcome": "em_aberto",
-      "evaluatedReturnPct": -1.37,
-      "evaluatedAt": "2026-11-15T01:20:13.722Z"
+      "outcome": "erro",
+      "evaluatedReturnPct": -2.69,
+      "evaluatedAt": "2026-11-15T01:31:12.171Z"
     }
   ],
   "priceTriggers": [],
@@ -148,6 +148,12 @@
       "customWebhookToken": "",
       "metaPhoneNumberId": "",
       "metaAccessToken": "",
+      "forwardAiSignals": true
+    },
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "chatId": "",
       "forwardAiSignals": true
     }
   },

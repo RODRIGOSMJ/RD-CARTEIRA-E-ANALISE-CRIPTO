@@ -23,6 +23,11 @@ import {
   isWhatsAppConfigured,
   sendWhatsAppMessage,
 } from './whatsapp.ts';
+import {
+  formatAiAlertsTelegramHtml,
+  isTelegramConfigured,
+  sendTelegramMessage,
+} from './telegram.ts';
 
 function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -525,6 +530,24 @@ ${JSON.stringify(contextPayload, null, 2)}
         return sendWhatsAppMessage(activeSettings.whatsapp, text, {
           type: 'ai_signals',
           alerts: actionable,
+        });
+      });
+    }
+  }
+
+  if (
+    activeSettings.telegram?.forwardAiSignals &&
+    isTelegramConfigured(activeSettings.telegram) &&
+    newAlerts.length > 0
+  ) {
+    const actionable = newAlerts.filter(
+      (a) => a.action === 'COMPRAR' || a.action === 'VENDER'
+    );
+    if (actionable.length > 0) {
+      void getUsdBrlRate().then((rate) => {
+        const html = formatAiAlertsTelegramHtml(actionable, rate);
+        return sendTelegramMessage(activeSettings.telegram!, html, {
+          isPreformattedHtml: true,
         });
       });
     }

@@ -2,7 +2,7 @@
   "entities": {
     "UserCloudProfile": {
       "title": "UserCloudProfile",
-      "description": "User workspace preferences, portfolio name, and WhatsApp notification settings synchronized across devices.",
+      "description": "User workspace preferences, portfolio name, WhatsApp and Telegram notification settings synchronized across devices.",
       "type": "object",
       "properties": {
         "ownerId": {
@@ -17,7 +17,7 @@
         },
         "settings": {
           "type": "object",
-          "description": "Automation and WhatsApp configuration map."
+          "description": "Automation, WhatsApp, and Telegram configuration map."
         },
         "createdAt": {
           "type": "string",
@@ -201,6 +201,9 @@
         "sendWhatsApp": {
           "type": "boolean"
         },
+        "sendTelegram": {
+          "type": "boolean"
+        },
         "note": {
           "type": "string",
           "maxLength": 200
@@ -218,7 +221,7 @@
         },
         "lastDeliveryStatus": {
           "type": "string",
-          "enum": ["enviado", "falha", "sem_whatsapp"]
+          "enum": ["enviado", "falha", "sem_whatsapp", "sem_canal"]
         },
         "lastDeliveryError": {
           "type": "string",

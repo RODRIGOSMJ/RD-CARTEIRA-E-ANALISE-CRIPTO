@@ -10,6 +10,7 @@ import type {
   PriceTrigger,
   SignalAlert,
   StudyCycleSummary,
+  TelegramSettings,
   WatchlistAsset,
   WhatsAppSettings,
 } from '../src/types/crypto.ts';
@@ -28,6 +29,13 @@ export const DEFAULT_WHATSAPP_SETTINGS: WhatsAppSettings = {
   forwardAiSignals: true,
 };
 
+export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettings = {
+  enabled: false,
+  botToken: '',
+  chatId: '',
+  forwardAiSignals: true,
+};
+
 export const DEFAULT_SETTINGS: AppSettings = {
   autoStudyEnabled: true,
   intervalMinutes: 5,
@@ -35,6 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   minConfidenceForAlert: 65,
   webhookUrl: '',
   whatsapp: DEFAULT_WHATSAPP_SETTINGS,
+  telegram: DEFAULT_TELEGRAM_SETTINGS,
 };
 
 export interface PersistedStore {
@@ -79,6 +88,10 @@ export function loadStore(): PersistedStore {
           whatsapp: {
             ...DEFAULT_WHATSAPP_SETTINGS,
             ...(parsed.settings?.whatsapp ?? {}),
+          },
+          telegram: {
+            ...DEFAULT_TELEGRAM_SETTINGS,
+            ...(parsed.settings?.telegram ?? {}),
           },
         },
         portfolioName: parsed.portfolioName || 'MINHA CARTEIRA',

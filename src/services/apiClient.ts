@@ -12,6 +12,7 @@ import type {
   SignalAction,
   SignalAlert,
   StudyCycleSummary,
+  TelegramSettings,
   TransactionType,
   TriggerActionHint,
   TriggerConditionType,
@@ -113,6 +114,13 @@ const DEFAULT_LOCAL_WHATSAPP: WhatsAppSettings = {
   forwardAiSignals: true,
 };
 
+const DEFAULT_LOCAL_TELEGRAM: TelegramSettings = {
+  enabled: false,
+  botToken: '',
+  chatId: '',
+  forwardAiSignals: true,
+};
+
 const DEFAULT_LOCAL_SETTINGS: AppSettings = {
   autoStudyEnabled: true,
   intervalMinutes: 5,
@@ -120,6 +128,7 @@ const DEFAULT_LOCAL_SETTINGS: AppSettings = {
   minConfidenceForAlert: 65,
   webhookUrl: '',
   whatsapp: DEFAULT_LOCAL_WHATSAPP,
+  telegram: DEFAULT_LOCAL_TELEGRAM,
 };
 
 function loadLocalStore(): LocalStore {
@@ -139,6 +148,10 @@ function loadLocalStore(): LocalStore {
           whatsapp: {
             ...DEFAULT_LOCAL_WHATSAPP,
             ...(parsed.settings?.whatsapp ?? {}),
+          },
+          telegram: {
+            ...DEFAULT_LOCAL_TELEGRAM,
+            ...(parsed.settings?.telegram ?? {}),
           },
         },
         portfolioName: parsed.portfolioName || 'MINHA CARTEIRA',
@@ -776,6 +789,7 @@ export function evaluateCloudAlertsAndTriggers(
     evaluatedAt: string;
   }>;
   pendingWhatsApps: Array<{ triggerId: string; text: string; metadata: unknown }>;
+  pendingTelegrams: Array<{ triggerId: string; text: string }>;
 } {
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
@@ -824,6 +838,7 @@ export function evaluateCloudAlertsAndTriggers(
   const updatedTriggers: PriceTrigger[] = [];
   const newAlerts: SignalAlert[] = [];
   const pendingWhatsApps: Array<{ triggerId: string; text: string; metadata: unknown }> = [];
+  const pendingTelegrams: Array<{ triggerId: string; text: string }> = [];
 
   for (const original of params.triggers) {
     const snap = params.snapshots[original.coinId];
@@ -875,8 +890,26 @@ export function evaluateCloudAlertsAndTriggers(
           else if (trig.conditionType === 'queda_pct' || trig.conditionType === 'alta_pct') {
             trig.referencePriceUsd = price;
           }
-          if (trig.sendWhatsApp && !params.settings.whatsapp.enabled) {
-            trig.lastDeliveryStatus = 'sem_whatsapp';
+          const wantWhatsApp = Boolean(trig.sendWhatsApp);
+          const wantTelegram = Boolean(trig.sendTelegram);
+          const waReady = Boolean(params.settings.whatsapp?.enabled);
+          const tgReady = Boolean(
+            params.settings.telegram?.enabled &&
+              params.settings.telegram?.botToken?.trim() &&
+              params.settings.telegram?.chatId?.trim()
+          );
+
+          if ((wantWhatsApp && !waReady) && (!wantTelegram || !tgReady)) {
+            trig.lastDeliveryStatus = wantTelegram && !wantWhatsApp ? 'sem_canal' : 'sem_whatsapp';
+            trig.lastDeliveryError =
+              wantTelegram && wantWhatsApp
+                ? 'WhatsApp e Telegram não configurados'
+                : wantTelegram
+                ? 'Telegram não configurado'
+                : 'WhatsApp não configurado';
+          } else if (wantTelegram && !tgReady && !wantWhatsApp) {
+            trig.lastDeliveryStatus = 'sem_canal';
+            trig.lastDeliveryError = 'Telegram não configurado';
           }
           changed = true;
 
@@ -910,12 +943,20 @@ export function evaluateCloudAlertsAndTriggers(
             outcome: 'em_aberto',
           });
 
-          if (trig.sendWhatsApp && params.settings.whatsapp.enabled) {
-            const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}`;
+          if (wantWhatsApp && waReady) {
+            const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}${trig.note ? `\nObs: ${trig.note}` : ''}`;
             pendingWhatsApps.push({
               triggerId: trig.id,
               text: msg,
               metadata: { trig },
+            });
+          }
+
+          if (wantTelegram && tgReady) {
+            const msg = `*SinalCripto IA — Gatilho Disparado (24h)*\nAtivo: ${trig.name} (${trig.symbol})\nPreço atual: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção planejada: ${trig.actionHint}${trig.note ? `\nObservação: ${trig.note}` : ''}`;
+            pendingTelegrams.push({
+              triggerId: trig.id,
+              text: msg,
             });
           }
         }
@@ -930,6 +971,7 @@ export function evaluateCloudAlertsAndTriggers(
     newAlerts,
     evaluatedAlerts,
     pendingWhatsApps,
+    pendingTelegrams,
   };
 }
 
@@ -1266,11 +1308,31 @@ async function evaluateLocalPriceTriggers(
     store.alerts = store.alerts.slice(0, 120);
     updated = true;
 
-    if (trig.sendWhatsApp && store.settings.whatsapp.enabled) {
-      const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}`;
-      const r = await sendLocalWhatsAppMessage(store.settings.whatsapp, msg, { trig });
-      trig.lastDeliveryStatus = r.ok ? 'enviado' : 'falha';
-      trig.lastDeliveryError = r.ok ? undefined : r.error;
+    if (trig.sendWhatsApp || trig.sendTelegram) {
+      const sentChannels: string[] = [];
+      const errors: string[] = [];
+      if (trig.sendWhatsApp && store.settings.whatsapp.enabled) {
+        const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}${trig.note ? `\nObs: ${trig.note}` : ''}`;
+        const r = await sendLocalWhatsAppMessage(store.settings.whatsapp, msg, { trig });
+        if (r.ok) sentChannels.push('WhatsApp');
+        else errors.push(`WhatsApp: ${r.error || 'Falha'}`);
+      }
+      if (trig.sendTelegram && store.settings.telegram?.enabled) {
+        const tgMsg = `*SinalCripto IA — Gatilho Disparado (24h)*\nAtivo: ${trig.name} (${trig.symbol})\nPreço atual: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção planejada: ${trig.actionHint}${trig.note ? `\nObservação: ${trig.note}` : ''}`;
+        const tr = await sendLocalTelegramMessage(store.settings.telegram, tgMsg);
+        if (tr.ok) sentChannels.push('Telegram');
+        else errors.push(`Telegram: ${tr.error || 'Falha'}`);
+      }
+      if (sentChannels.length > 0) {
+        trig.lastDeliveryStatus = 'enviado';
+        trig.lastDeliveryError =
+          errors.length > 0
+            ? `${sentChannels.join(' + ')} enviado (${errors.join('; ')})`
+            : `Enviado via ${sentChannels.join(' e ')}`;
+      } else if (errors.length > 0) {
+        trig.lastDeliveryStatus = 'falha';
+        trig.lastDeliveryError = errors.join(' | ');
+      }
     }
   }
   if (updated) saveLocalStore(store);
@@ -1474,6 +1536,164 @@ export async function apiDispatchWhatsApp(
     }
   }
   return sendLocalWhatsAppMessage(whatsapp, text, metadata);
+}
+
+function escapeLocalTelegramHtml(raw: string): string {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function formatLocalTelegramHtml(raw: string): string {
+  return escapeLocalTelegramHtml(raw).replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+}
+
+async function sendLocalTelegramMessage(
+  telegram: TelegramSettings,
+  text: string,
+  isPreformattedHtml = false
+): Promise<{ ok: boolean; error?: string }> {
+  const token = String(telegram.botToken || '').trim();
+  const chatId = String(telegram.chatId || '').trim();
+  if (!/^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(token)) {
+    return {
+      ok: false,
+      error: 'Bot Token do Telegram inválido. Copie o token completo do @BotFather.',
+    };
+  }
+  if (!chatId) {
+    return {
+      ok: false,
+      error: 'Informe o Chat ID do Telegram ou clique em "Detectar Chat ID".',
+    };
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: isPreformattedHtml ? text : formatLocalTelegramHtml(text),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      description?: string;
+    };
+    if (!res.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.description || `Erro do Telegram HTTP ${res.status}`,
+      };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err?.message || 'Erro ao conectar à API do Telegram.',
+    };
+  }
+}
+
+export async function apiDispatchTelegram(
+  telegram: TelegramSettings,
+  text: string,
+  isPreformattedHtml = false
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await safeFetchJson<{ ok: boolean }>('/api/telegram/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegram, text, isPreformattedHtml }),
+    });
+    return { ok: true };
+  } catch (err: any) {
+    if (!(err instanceof BackendUnavailableError)) {
+      return { ok: false, error: err?.message || 'Falha ao enviar Telegram.' };
+    }
+  }
+  return sendLocalTelegramMessage(telegram, text, isPreformattedHtml);
+}
+
+export async function apiTestTelegram(telegram: TelegramSettings): Promise<void> {
+  try {
+    await safeFetchJson<{ ok: boolean }>('/api/telegram/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegram }),
+    });
+    return;
+  } catch (err: any) {
+    if (!(err instanceof BackendUnavailableError)) {
+      throw err;
+    }
+  }
+  const r = await sendLocalTelegramMessage(
+    telegram,
+    '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos e sinais da IA.'
+  );
+  if (!r.ok) {
+    throw new Error(r.error || 'Falha ao enviar teste no Telegram.');
+  }
+}
+
+export async function apiDetectTelegramChatId(
+  botToken: string
+): Promise<{ chatId: string; chatLabel: string }> {
+  try {
+    const res = await safeFetchJson<{ ok: boolean; chatId: string; chatLabel: string }>(
+      '/api/telegram/detect-chat',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken }),
+      }
+    );
+    return { chatId: res.chatId, chatLabel: res.chatLabel };
+  } catch (err: any) {
+    if (!(err instanceof BackendUnavailableError)) {
+      throw err;
+    }
+  }
+
+  const token = botToken.trim();
+  if (!/^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(token)) {
+    throw new Error('Informe primeiro um Bot Token válido do @BotFather.');
+  }
+  const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=25`, {
+    signal: AbortSignal.timeout(10_000),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    description?: string;
+    result?: Array<Record<string, any>>;
+  };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.description || 'Bot Token do Telegram inválido.');
+  }
+  const updates = Array.isArray(data.result) ? data.result : [];
+  for (let i = updates.length - 1; i >= 0; i--) {
+    const u = updates[i];
+    const chat =
+      u?.message?.chat ||
+      u?.edited_message?.chat ||
+      u?.channel_post?.chat ||
+      u?.my_chat_member?.chat;
+    if (chat && chat.id !== undefined && chat.id !== null) {
+      const label =
+        chat.title ||
+        [chat.first_name, chat.last_name].filter(Boolean).join(' ') ||
+        (chat.username ? `@${chat.username}` : String(chat.id));
+      return { chatId: String(chat.id), chatLabel: label };
+    }
+  }
+  throw new Error(
+    'Nenhuma mensagem recente encontrada no bot. Envie /start para o seu bot no Telegram e tente novamente.'
+  );
 }
 
 export async function apiRunCloudStudy(params: {
@@ -1915,6 +2135,12 @@ export async function apiUpdateSettings(
         whatsapp: patch.whatsapp
           ? { ...store.settings.whatsapp, ...patch.whatsapp }
           : store.settings.whatsapp,
+        telegram: patch.telegram
+          ? {
+              ...(store.settings.telegram ?? DEFAULT_LOCAL_TELEGRAM),
+              ...patch.telegram,
+            }
+          : store.settings.telegram ?? DEFAULT_LOCAL_TELEGRAM,
       };
       saveLocalStore(store);
       ensureLocalNextStudyAt(store.settings, true);
@@ -2207,6 +2433,7 @@ export async function apiCreateTrigger(payload: {
   repeatMode: TriggerRepeatMode;
   cooldownMinutes?: number;
   sendWhatsApp?: boolean;
+  sendTelegram?: boolean;
   note?: string;
 }): Promise<AppStatePayload> {
   return withFallback(
@@ -2238,6 +2465,7 @@ export async function apiCreateTrigger(payload: {
         cooldownMinutes: payload.cooldownMinutes ?? 60,
         enabled: true,
         sendWhatsApp: payload.sendWhatsApp ?? true,
+        sendTelegram: payload.sendTelegram ?? false,
         note: payload.note?.trim() || undefined,
         createdAt: new Date().toISOString(),
         triggerCount: 0,
@@ -2271,6 +2499,7 @@ export async function apiUpdateTrigger(
       if (trig) {
         if (typeof patch.enabled === 'boolean') trig.enabled = patch.enabled;
         if (typeof patch.sendWhatsApp === 'boolean') trig.sendWhatsApp = patch.sendWhatsApp;
+        if (typeof patch.sendTelegram === 'boolean') trig.sendTelegram = patch.sendTelegram;
         if (patch.resetReference) {
           const live = await apiGetCoinPrice(trig.coinId, trig.symbol);
           if (live && live > 0) trig.referencePriceUsd = live;

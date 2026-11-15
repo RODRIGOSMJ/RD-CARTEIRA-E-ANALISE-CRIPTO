@@ -70,6 +70,27 @@ service cloud.firestore {
         && w.forwardAiSignals is bool;
     }
 
+    // Telegram settings nested map validator
+    function isValidTelegramMap(t) {
+      return t is map
+        && t.keys().hasAll([
+          'enabled',
+          'botToken',
+          'chatId',
+          'forwardAiSignals'
+        ])
+        && t.keys().hasOnly([
+          'enabled',
+          'botToken',
+          'chatId',
+          'forwardAiSignals'
+        ])
+        && t.enabled is bool
+        && t.botToken is string && t.botToken.size() <= 200
+        && t.chatId is string && t.chatId.size() <= 64
+        && t.forwardAiSignals is bool;
+    }
+
     // Settings nested map validator
     function isValidSettingsMap(s) {
       return s is map
@@ -87,14 +108,16 @@ service cloud.firestore {
           'currency',
           'minConfidenceForAlert',
           'webhookUrl',
-          'whatsapp'
+          'whatsapp',
+          'telegram'
         ])
         && s.autoStudyEnabled is bool
         && s.intervalMinutes is number && s.intervalMinutes >= 1 && s.intervalMinutes <= 120
         && s.currency is string && s.currency in ['USD', 'BRL']
         && s.minConfidenceForAlert is number && s.minConfidenceForAlert >= 40 && s.minConfidenceForAlert <= 95
         && s.webhookUrl is string && s.webhookUrl.size() <= 500
-        && isValidWhatsAppMap(s.whatsapp);
+        && isValidWhatsAppMap(s.whatsapp)
+        && (!('telegram' in s) || isValidTelegramMap(s.telegram));
     }
 
     // Entity Validators
@@ -197,6 +220,7 @@ service cloud.firestore {
           'cooldownMinutes',
           'enabled',
           'sendWhatsApp',
+          'sendTelegram',
           'note',
           'createdAtStr',
           'lastTriggeredAt',
@@ -220,11 +244,12 @@ service cloud.firestore {
         && data.cooldownMinutes is number && data.cooldownMinutes >= 1 && data.cooldownMinutes <= 1440
         && data.enabled is bool
         && data.sendWhatsApp is bool
+        && (!('sendTelegram' in data) || data.sendTelegram is bool)
         && (!('note' in data) || (data.note is string && data.note.size() <= 200))
         && data.createdAtStr is string && data.createdAtStr.size() >= 1 && data.createdAtStr.size() <= 48
         && (!('lastTriggeredAt' in data) || (data.lastTriggeredAt is string && data.lastTriggeredAt.size() <= 48))
         && (!('lastTriggeredPriceUsd' in data) || data.lastTriggeredPriceUsd is number)
-        && (!('lastDeliveryStatus' in data) || (data.lastDeliveryStatus is string && data.lastDeliveryStatus in ['enviado', 'falha', 'sem_whatsapp']))
+        && (!('lastDeliveryStatus' in data) || (data.lastDeliveryStatus is string && data.lastDeliveryStatus in ['enviado', 'falha', 'sem_whatsapp', 'sem_canal']))
         && (!('lastDeliveryError' in data) || (data.lastDeliveryError is string && data.lastDeliveryError.size() <= 300))
         && data.triggerCount is number && data.triggerCount >= 0
         && data.createdAt is timestamp
@@ -479,6 +504,7 @@ service cloud.firestore {
             'cooldownMinutes',
             'enabled',
             'sendWhatsApp',
+            'sendTelegram',
             'note',
             'lastTriggeredAt',
             'lastTriggeredPriceUsd',

@@ -34,6 +34,7 @@ import { PortfolioView } from './components/PortfolioView.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { SignalBadge } from './components/SignalBadge.tsx';
 import { Sparkline } from './components/Sparkline.tsx';
+import { TelegramSettingsPanel } from './components/TelegramSettingsPanel.tsx';
 import { TriggersPanel } from './components/TriggersPanel.tsx';
 import { WhatsAppSettingsPanel } from './components/WhatsAppSettingsPanel.tsx';
 import {
@@ -60,6 +61,7 @@ import {
   apiDeleteStudyCycle,
   apiDeleteTransaction,
   apiDeleteTrigger,
+  apiDispatchTelegram,
   apiDispatchWhatsApp,
   apiFetchSnapshotsForAssets,
   apiGetCoinPrice,
@@ -220,12 +222,13 @@ export default function App() {
   const [alertsSubTab, setAlertsSubTab] = useState<'triggers' | 'alerts'>(() =>
     getInitialStorageChoice(ALERTS_SUBTAB_STORAGE_KEY, ['triggers', 'alerts'], 'triggers')
   );
-  const [rightSettingsTab, setRightSettingsTab] = useState<'whatsapp' | 'automacao'>(() =>
-    getInitialStorageChoice(
-      RIGHT_SETTINGS_SUBTAB_STORAGE_KEY,
-      ['whatsapp', 'automacao'],
-      'whatsapp'
-    )
+  const [rightSettingsTab, setRightSettingsTab] = useState<'whatsapp' | 'telegram' | 'automacao'>(
+    () =>
+      getInitialStorageChoice(
+        RIGHT_SETTINGS_SUBTAB_STORAGE_KEY,
+        ['whatsapp', 'telegram', 'automacao'],
+        'whatsapp'
+      )
   );
   const [studyStatusMsg, setStudyStatusMsg] = useState<string | null>(null);
   const [liveBannerAlerts, setLiveBannerAlerts] = useState<SignalAlert[]>([]);
@@ -699,20 +702,57 @@ export default function App() {
 
       const finalTriggers = [...evaluated.updatedTriggers];
       const nowLock = Date.now();
+      const channelOutcomeByTrig = new Map<
+        string,
+        { sent: string[]; errors: string[] }
+      >();
+
       for (const pending of evaluated.pendingWhatsApps) {
-        const prevLock = triggerDispatchLockRef.current.get(pending.triggerId) ?? 0;
+        const lockKey = `${pending.triggerId}:wa`;
+        const prevLock = triggerDispatchLockRef.current.get(lockKey) ?? 0;
         if (nowLock - prevLock < 20_000) continue;
-        triggerDispatchLockRef.current.set(pending.triggerId, nowLock);
+        triggerDispatchLockRef.current.set(lockKey, nowLock);
 
         const delivery = await apiDispatchWhatsApp(
           workspace.settings.whatsapp,
           pending.text,
           pending.metadata
         );
-        const match = finalTriggers.find((t) => t.id === pending.triggerId);
-        if (match) {
-          match.lastDeliveryStatus = delivery.ok ? 'enviado' : 'falha';
-          match.lastDeliveryError = delivery.ok ? undefined : delivery.error;
+        const rec = channelOutcomeByTrig.get(pending.triggerId) ?? { sent: [], errors: [] };
+        if (delivery.ok) rec.sent.push('WhatsApp');
+        else rec.errors.push(`WhatsApp: ${delivery.error || 'Falha'}`);
+        channelOutcomeByTrig.set(pending.triggerId, rec);
+      }
+
+      for (const pending of evaluated.pendingTelegrams) {
+        if (!workspace.settings.telegram) continue;
+        const lockKey = `${pending.triggerId}:tg`;
+        const prevLock = triggerDispatchLockRef.current.get(lockKey) ?? 0;
+        if (nowLock - prevLock < 20_000) continue;
+        triggerDispatchLockRef.current.set(lockKey, nowLock);
+
+        const delivery = await apiDispatchTelegram(
+          workspace.settings.telegram,
+          pending.text
+        );
+        const rec = channelOutcomeByTrig.get(pending.triggerId) ?? { sent: [], errors: [] };
+        if (delivery.ok) rec.sent.push('Telegram');
+        else rec.errors.push(`Telegram: ${delivery.error || 'Falha'}`);
+        channelOutcomeByTrig.set(pending.triggerId, rec);
+      }
+
+      for (const [trigId, rec] of channelOutcomeByTrig.entries()) {
+        const match = finalTriggers.find((t) => t.id === trigId);
+        if (!match) continue;
+        if (rec.sent.length > 0) {
+          match.lastDeliveryStatus = 'enviado';
+          match.lastDeliveryError =
+            rec.errors.length > 0
+              ? `${rec.sent.join(' + ')} enviado (${rec.errors.join('; ')})`
+              : `Enviado via ${rec.sent.join(' e ')}`;
+        } else if (rec.errors.length > 0) {
+          match.lastDeliveryStatus = 'falha';
+          match.lastDeliveryError = rec.errors.join(' | ');
         }
       }
 
@@ -1152,6 +1192,17 @@ export default function App() {
         whatsapp: patch.whatsapp
           ? { ...current.whatsapp, ...patch.whatsapp }
           : current.whatsapp,
+        telegram: patch.telegram
+          ? {
+              ...(current.telegram ?? {
+                enabled: false,
+                botToken: '',
+                chatId: '',
+                forwardAiSignals: true,
+              }),
+              ...patch.telegram,
+            }
+          : current.telegram,
       });
       await cloudUpdateSettings(cloudUser.uid, merged);
       return;
@@ -1434,6 +1485,7 @@ export default function App() {
     repeatMode: TriggerRepeatMode;
     cooldownMinutes?: number;
     sendWhatsApp?: boolean;
+    sendTelegram?: boolean;
     note?: string;
   }) {
     if (cloudUser) {
@@ -1455,6 +1507,7 @@ export default function App() {
         cooldownMinutes: payload.cooldownMinutes ?? 60,
         enabled: true,
         sendWhatsApp: payload.sendWhatsApp ?? true,
+        sendTelegram: payload.sendTelegram ?? false,
         note: payload.note?.trim() || undefined,
         createdAt: new Date().toISOString(),
         triggerCount: 0,
@@ -1480,6 +1533,26 @@ export default function App() {
         cloudUser
           ? formatFriendlyFirestoreError(err)
           : err?.message || 'Erro ao atualizar gatilho.'
+      );
+    }
+  }
+
+  async function handleUpdateTriggerChannels(
+    triggerId: string,
+    patch: { sendWhatsApp?: boolean; sendTelegram?: boolean }
+  ) {
+    try {
+      if (cloudUser) {
+        await cloudUpdateTrigger(cloudUser.uid, triggerId, patch);
+        return;
+      }
+      const updatedState = await apiUpdateTrigger(triggerId, patch);
+      setLocalState(updatedState);
+    } catch (err: any) {
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Erro ao atualizar canais do gatilho.'
       );
     }
   }
@@ -2827,7 +2900,7 @@ export default function App() {
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
-                      Gatilhos WhatsApp 24h ({(state.triggers ?? []).length})
+                      Gatilhos 24h ({(state.triggers ?? []).length})
                     </button>
                     <button
                       type="button"
@@ -2842,22 +2915,33 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-200 dark:border-white/[0.08] shadow-xs dark:shadow-none">
+                  <div className="flex flex-wrap items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-200 dark:border-white/[0.08] shadow-xs dark:shadow-none">
                     <button
                       type="button"
                       onClick={() => setRightSettingsTab('whatsapp')}
-                      className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         rightSettingsTab === 'whatsapp'
                           ? 'bg-emerald-600 text-white'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
-                      Configurar WhatsApp 24h
+                      Configurar WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRightSettingsTab('telegram')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        rightSettingsTab === 'telegram'
+                          ? 'bg-sky-600 text-white'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Configurar Telegram
                     </button>
                     <button
                       type="button"
                       onClick={() => setRightSettingsTab('automacao')}
-                      className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         rightSettingsTab === 'automacao'
                           ? 'bg-sky-600 text-white'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -2877,8 +2961,10 @@ export default function App() {
                         currency={state.settings.currency}
                         usdBrlRate={state.usdBrlRate}
                         whatsappEnabled={Boolean(state.settings.whatsapp?.enabled)}
+                        telegramEnabled={Boolean(state.settings.telegram?.enabled)}
                         onOpenNewTrigger={() => openTriggerModal()}
                         onToggleTrigger={handleToggleTrigger}
+                        onUpdateChannels={handleUpdateTriggerChannels}
                         onResetReference={handleResetTriggerRef}
                         onDeleteTrigger={handleDeleteTrigger}
                         onClearTriggers={handleClearTriggers}
@@ -3004,6 +3090,18 @@ export default function App() {
                         whatsapp={state.settings.whatsapp}
                         onUpdateSettings={handleUpdateSettings}
                       />
+                    ) : rightSettingsTab === 'telegram' ? (
+                      <TelegramSettingsPanel
+                        telegram={
+                          state.settings.telegram ?? {
+                            enabled: false,
+                            botToken: '',
+                            chatId: '',
+                            forwardAiSignals: true,
+                          }
+                        }
+                        onUpdateSettings={handleUpdateSettings}
+                      />
                     ) : (
                       <AutomationSettingsPanel
                         settings={state.settings}
@@ -3063,6 +3161,7 @@ export default function App() {
           currency={state.settings.currency}
           usdBrlRate={state.usdBrlRate}
           whatsappEnabled={Boolean(state.settings.whatsapp?.enabled)}
+          telegramEnabled={Boolean(state.settings.telegram?.enabled)}
           preselectedCoinId={triggerPreselectedCoinId}
           onClose={() => setTriggerModalOpen(false)}
           onSubmit={handleCreateTrigger}

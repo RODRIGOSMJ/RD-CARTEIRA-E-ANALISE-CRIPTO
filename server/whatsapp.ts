@@ -12,6 +12,11 @@ import {
   normalizeWhatsAppPhone,
 } from '../src/utils/whatsappFormat.ts';
 import { getStore, saveStore } from './store.ts';
+import {
+  formatTriggerTelegramHtml,
+  isTelegramConfigured,
+  sendTelegramMessage,
+} from './telegram.ts';
 
 function formatUsdForMsg(usd: number): string {
   if (!Number.isFinite(usd)) return 'US$ 0,00';
@@ -382,26 +387,65 @@ export async function evaluatePriceTriggers(
     triggeredAlerts.push(alert);
     updated = true;
 
-    // Send WhatsApp message automatically if enabled
-    if (trigger.sendWhatsApp) {
-      if (isWhatsAppConfigured(store.settings.whatsapp)) {
-        const msgText = formatTriggerWhatsAppText(
-          { ...trigger, referencePriceUsd: prevRefPrice },
-          currentPrice,
-          usdBrlRate,
-          actualMovePct
-        );
-        const delivery = await sendWhatsAppMessage(store.settings.whatsapp, msgText, {
-          type: 'price_trigger',
-          trigger,
-          currentPriceUsd: currentPrice,
-        });
-        trigger.lastDeliveryStatus = delivery.ok ? 'enviado' : 'falha';
-        trigger.lastDeliveryError = delivery.ok ? undefined : delivery.error;
-      } else {
-        trigger.lastDeliveryStatus = 'sem_whatsapp';
+    // Send WhatsApp and/or Telegram automatically if selected
+    const wantWhatsApp = Boolean(trigger.sendWhatsApp);
+    const wantTelegram = Boolean(trigger.sendTelegram);
+    if (wantWhatsApp || wantTelegram) {
+      const sentChannels: string[] = [];
+      const failedErrors: string[] = [];
+      const unconfiguredMsgs: string[] = [];
+
+      if (wantWhatsApp) {
+        if (isWhatsAppConfigured(store.settings.whatsapp)) {
+          const msgText = formatTriggerWhatsAppText(
+            { ...trigger, referencePriceUsd: prevRefPrice },
+            currentPrice,
+            usdBrlRate,
+            actualMovePct
+          );
+          const delivery = await sendWhatsAppMessage(store.settings.whatsapp, msgText, {
+            type: 'price_trigger',
+            trigger,
+            currentPriceUsd: currentPrice,
+          });
+          if (delivery.ok) sentChannels.push('WhatsApp');
+          else failedErrors.push(`WhatsApp: ${delivery.error || 'Falha'}`);
+        } else {
+          unconfiguredMsgs.push('WhatsApp não configurado');
+        }
+      }
+
+      if (wantTelegram) {
+        if (isTelegramConfigured(store.settings.telegram)) {
+          const tgHtml = formatTriggerTelegramHtml(
+            { ...trigger, referencePriceUsd: prevRefPrice },
+            currentPrice,
+            usdBrlRate,
+            actualMovePct
+          );
+          const tgDelivery = await sendTelegramMessage(store.settings.telegram!, tgHtml, {
+            isPreformattedHtml: true,
+          });
+          if (tgDelivery.ok) sentChannels.push('Telegram');
+          else failedErrors.push(`Telegram: ${tgDelivery.error || 'Falha'}`);
+        } else {
+          unconfiguredMsgs.push('Telegram não configurado');
+        }
+      }
+
+      if (sentChannels.length > 0) {
+        trigger.lastDeliveryStatus = 'enviado';
+        const extraNotes = [...failedErrors, ...unconfiguredMsgs];
         trigger.lastDeliveryError =
-          'WhatsApp automático desativado ou sem credenciais configuradas.';
+          extraNotes.length > 0
+            ? `${sentChannels.join(' + ')} enviado (${extraNotes.join('; ')})`
+            : `Enviado via ${sentChannels.join(' e ')}`;
+      } else if (failedErrors.length > 0) {
+        trigger.lastDeliveryStatus = 'falha';
+        trigger.lastDeliveryError = failedErrors.join(' | ');
+      } else {
+        trigger.lastDeliveryStatus = wantTelegram && !wantWhatsApp ? 'sem_canal' : 'sem_whatsapp';
+        trigger.lastDeliveryError = unconfiguredMsgs.join(' · ') || 'Canal automático desativado.';
       }
     }
   }

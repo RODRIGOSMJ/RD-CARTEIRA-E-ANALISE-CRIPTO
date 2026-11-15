@@ -9,8 +9,13 @@ interface TriggersPanelProps {
   currency: 'USD' | 'BRL';
   usdBrlRate: number;
   whatsappEnabled: boolean;
+  telegramEnabled: boolean;
   onOpenNewTrigger: () => void;
   onToggleTrigger: (triggerId: string, enabled: boolean) => Promise<void>;
+  onUpdateChannels: (
+    triggerId: string,
+    patch: { sendWhatsApp?: boolean; sendTelegram?: boolean }
+  ) => Promise<void>;
   onResetReference: (triggerId: string) => Promise<void>;
   onDeleteTrigger: (triggerId: string) => Promise<void>;
   onClearTriggers: () => Promise<void>;
@@ -63,12 +68,23 @@ export function TriggersPanel({
   currency,
   usdBrlRate,
   whatsappEnabled,
+  telegramEnabled,
   onOpenNewTrigger,
   onToggleTrigger,
+  onUpdateChannels,
   onResetReference,
   onDeleteTrigger,
   onClearTriggers,
 }: TriggersPanelProps) {
+  const channelStatusText =
+    whatsappEnabled && telegramEnabled
+      ? 'WhatsApp e Telegram ativos: seus gatilhos são verificados em tempo real e enviados automaticamente.'
+      : whatsappEnabled
+      ? 'WhatsApp ativo (Telegram disponível na aba ao lado): gatilhos verificados automaticamente 24h.'
+      : telegramEnabled
+      ? 'Telegram ativo: seus gatilhos são verificados em tempo real e enviados automaticamente.'
+      : 'Ative e configure seu WhatsApp ou Telegram ao lado para receber os disparos automaticamente.';
+
   return (
     <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
@@ -77,9 +93,7 @@ export function TriggersPanel({
             Meus gatilhos automáticos 24h ({triggers.length})
           </h2>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-            {whatsappEnabled
-              ? 'WhatsApp ativo: seus gatilhos são verificados a cada 10s e enviados automaticamente.'
-              : 'Ative e configure seu WhatsApp ao lado para receber os disparos automaticamente.'}
+            {channelStatusText}
           </p>
         </div>
 
@@ -114,7 +128,7 @@ export function TriggersPanel({
                 Nenhum gatilho armazenado ainda
               </p>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Armazene regras como &quot;se a Solana cair 10%, enviar no meu WhatsApp para comprar&quot; e o sistema vigia o mercado 24 horas por dia.
+                Armazene regras como &quot;se a Solana cair 10%, avisar no WhatsApp ou Telegram para comprar&quot; e o sistema vigia o mercado 24 horas por dia.
               </p>
             </div>
             <button
@@ -273,14 +287,41 @@ export function TriggersPanel({
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600 dark:text-slate-400 font-mono tabular-nums">
+                <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                   <span>
                     Modo: {trig.repeatMode === 'continuo' ? `Contínuo (${trig.cooldownMinutes}m cooldown)` : 'Disparo único'}
                   </span>
                   <span aria-hidden="true">·</span>
-                  <span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void onUpdateChannels(trig.id, { sendWhatsApp: !trig.sendWhatsApp })
+                    }
+                    title="Alternar envio no WhatsApp para este gatilho"
+                    className={`px-2 py-0.5 rounded border text-[11px] transition-colors ${
+                      trig.sendWhatsApp
+                        ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                        : 'border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
                     WhatsApp: {trig.sendWhatsApp ? 'Sim' : 'Não'}
-                  </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void onUpdateChannels(trig.id, {
+                        sendTelegram: !Boolean(trig.sendTelegram),
+                      })
+                    }
+                    title="Alternar envio no Telegram para este gatilho"
+                    className={`px-2 py-0.5 rounded border text-[11px] transition-colors ${
+                      trig.sendTelegram
+                        ? 'border-sky-300 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                        : 'border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Telegram: {trig.sendTelegram ? 'Sim' : 'Não'}
+                  </button>
                   {trig.triggerCount > 0 && (
                     <>
                       <span aria-hidden="true">·</span>
@@ -304,15 +345,18 @@ export function TriggersPanel({
                   {trig.lastDeliveryStatus === 'enviado' && (
                     <>
                       <span aria-hidden="true">·</span>
-                      <span className="text-emerald-700 dark:text-emerald-400">WhatsApp enviado</span>
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        {trig.lastDeliveryError || 'Alerta enviado'}
+                      </span>
                     </>
                   )}
                   {(trig.lastDeliveryStatus === 'falha' ||
-                    trig.lastDeliveryStatus === 'sem_whatsapp') && (
+                    trig.lastDeliveryStatus === 'sem_whatsapp' ||
+                    trig.lastDeliveryStatus === 'sem_canal') && (
                     <>
                       <span aria-hidden="true">·</span>
                       <span className="text-amber-700 dark:text-amber-400">
-                        {trig.lastDeliveryError || 'WhatsApp não configurado'}
+                        {trig.lastDeliveryError || 'Canal não configurado'}
                       </span>
                     </>
                   )}

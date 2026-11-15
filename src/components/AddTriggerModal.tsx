@@ -25,6 +25,7 @@ interface AddTriggerModalProps {
   currency: 'USD' | 'BRL';
   usdBrlRate: number;
   whatsappEnabled: boolean;
+  telegramEnabled: boolean;
   preselectedCoinId?: string | null;
   onClose: () => void;
   onSubmit: (payload: {
@@ -38,6 +39,7 @@ interface AddTriggerModalProps {
     repeatMode: TriggerRepeatMode;
     cooldownMinutes?: number;
     sendWhatsApp?: boolean;
+    sendTelegram?: boolean;
     note?: string;
   }) => Promise<void>;
 }
@@ -49,6 +51,7 @@ export function AddTriggerModal({
   currency,
   usdBrlRate,
   whatsappEnabled,
+  telegramEnabled,
   preselectedCoinId,
   onClose,
   onSubmit,
@@ -70,6 +73,7 @@ export function AddTriggerModal({
   const [repeatMode, setRepeatMode] = useState<TriggerRepeatMode>('continuo');
   const [cooldownMinutes, setCooldownMinutes] = useState('60');
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
+  const [sendTelegram, setSendTelegram] = useState(false);
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +96,8 @@ export function AddTriggerModal({
     setActionHint('COMPRAR');
     setRepeatMode('continuo');
     setCooldownMinutes('60');
-    setSendWhatsApp(true);
+    setSendWhatsApp(whatsappEnabled || !telegramEnabled);
+    setSendTelegram(telegramEnabled);
     setNote('');
     setCoinSearch('');
     setSearchResults([]);
@@ -252,6 +257,7 @@ export function AddTriggerModal({
         repeatMode,
         cooldownMinutes: Math.max(1, Number(cooldownMinutes) || 60),
         sendWhatsApp,
+        sendTelegram,
         note: note.trim() || undefined,
       });
       onClose();
@@ -277,10 +283,10 @@ export function AddTriggerModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/[0.07]">
           <div>
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Novo Gatilho 24h (WhatsApp)
+              Novo Gatilho 24h (WhatsApp e Telegram)
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              Monitorado a cada 10 segundos no servidor para avisar no momento exato.
+              Monitorado a cada 5 segundos em tempo real para avisar no momento exato.
             </p>
           </div>
           <button
@@ -568,7 +574,7 @@ export function AddTriggerModal({
 
           <div>
             <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
-              Observação opcional na mensagem do WhatsApp
+              Observação opcional na mensagem (WhatsApp / Telegram)
             </label>
             <input
               type="text"
@@ -580,21 +586,46 @@ export function AddTriggerModal({
             />
           </div>
 
-          <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] cursor-pointer">
-            <span className="text-xs text-slate-800 dark:text-slate-200">
-              Enviar automaticamente para meu WhatsApp
-            </span>
-            <input
-              type="checkbox"
-              checked={sendWhatsApp}
-              onChange={(e) => setSendWhatsApp(e.target.checked)}
-              className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 cursor-pointer"
-            />
-          </label>
+          <div className="space-y-2">
+            <label className="block text-xs text-slate-700 dark:text-slate-400">
+              Canais de envio automático
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] cursor-pointer">
+                <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                  Enviar no WhatsApp
+                </span>
+                <input
+                  type="checkbox"
+                  checked={sendWhatsApp}
+                  onChange={(e) => setSendWhatsApp(e.target.checked)}
+                  className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 cursor-pointer"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] cursor-pointer">
+                <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                  Enviar no Telegram
+                </span>
+                <input
+                  type="checkbox"
+                  checked={sendTelegram}
+                  onChange={(e) => setSendTelegram(e.target.checked)}
+                  className="w-4 h-4 accent-sky-600 dark:accent-sky-500 cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
 
           {sendWhatsApp && !whatsappEnabled && (
             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              Lembrete: ative e conecte seu número na aba Alertas → Configurar WhatsApp 24h para receber as mensagens automaticamente.
+              Lembrete WhatsApp: ative e conecte seu número em Alertas → Configurar WhatsApp para receber mensagens no WhatsApp.
+            </p>
+          )}
+
+          {sendTelegram && !telegramEnabled && (
+            <p className="text-[11px] text-amber-700 dark:text-amber-400">
+              Lembrete Telegram: ative seu bot em Alertas → Configurar Telegram para receber mensagens no Telegram.
             </p>
           )}
 

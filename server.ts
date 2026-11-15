@@ -9,6 +9,7 @@ import type {
   PortfolioSummary,
   PriceTrigger,
   SignalAlert,
+  TelegramSettings,
   TriggerActionHint,
   TriggerConditionType,
   TriggerRepeatMode,
@@ -29,6 +30,7 @@ import {
 } from './server/marketData.ts';
 import {
   computePortfolioSummary,
+  DEFAULT_TELEGRAM_SETTINGS,
   DEFAULT_WHATSAPP_SETTINGS,
   evaluatePastAlerts,
   getAccuracyStats,
@@ -36,6 +38,7 @@ import {
   loadStore,
   saveStore,
 } from './server/store.ts';
+import { detectTelegramChatId, sendTelegramMessage } from './server/telegram.ts';
 import { evaluatePriceTriggers, sendWhatsAppMessage } from './server/whatsapp.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -404,6 +407,7 @@ async function startServer() {
       const store = getStore();
       const patch = req.body as Partial<typeof store.settings>;
       const waPatch = patch.whatsapp as Partial<WhatsAppSettings> | undefined;
+      const tgPatch = patch.telegram as Partial<TelegramSettings> | undefined;
       store.settings = {
         ...store.settings,
         ...(typeof patch.autoStudyEnabled === 'boolean'
@@ -454,6 +458,20 @@ async function startServer() {
                 : {}),
             }
           : store.settings.whatsapp,
+        telegram: tgPatch
+          ? {
+              ...DEFAULT_TELEGRAM_SETTINGS,
+              ...(store.settings.telegram ?? {}),
+              ...(typeof tgPatch.enabled === 'boolean' ? { enabled: tgPatch.enabled } : {}),
+              ...(typeof tgPatch.botToken === 'string'
+                ? { botToken: tgPatch.botToken.trim() }
+                : {}),
+              ...(typeof tgPatch.chatId === 'string' ? { chatId: tgPatch.chatId.trim() } : {}),
+              ...(typeof tgPatch.forwardAiSignals === 'boolean'
+                ? { forwardAiSignals: tgPatch.forwardAiSignals }
+                : {}),
+            }
+          : store.settings.telegram ?? DEFAULT_TELEGRAM_SETTINGS,
       };
       saveStore();
       scheduleNextStudyTimer();
@@ -482,6 +500,42 @@ async function startServer() {
       res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao testar WhatsApp.' });
+    }
+  });
+
+  app.post('/api/telegram/test', async (req, res) => {
+    try {
+      const store = getStore();
+      const bodyTg = (req.body?.telegram ?? req.body ?? {}) as Partial<TelegramSettings>;
+      const merged: TelegramSettings = {
+        ...DEFAULT_TELEGRAM_SETTINGS,
+        ...(store.settings.telegram ?? {}),
+        ...bodyTg,
+      };
+      const testHtml =
+        '<b>SinalCripto IA — Teste de Conexão 24h</b>\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
+      const result = await sendTelegramMessage(merged, testHtml, { isPreformattedHtml: true });
+      if (!result.ok) {
+        return res.status(400).json({ error: result.error || 'Falha ao enviar teste no Telegram.' });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao testar Telegram.' });
+    }
+  });
+
+  app.post('/api/telegram/detect-chat', async (req, res) => {
+    try {
+      const token = String(
+        req.body?.botToken ?? getStore().settings.telegram?.botToken ?? ''
+      ).trim();
+      const result = await detectTelegramChatId(token);
+      if (!result.ok) {
+        return res.status(400).json({ error: result.error || 'Não foi possível detectar o Chat ID.' });
+      }
+      res.json({ ok: true, chatId: result.chatId, chatLabel: result.chatLabel });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao detectar Chat ID do Telegram.' });
     }
   });
 
@@ -757,6 +811,7 @@ async function startServer() {
         repeatMode,
         cooldownMinutes,
         sendWhatsApp,
+        sendTelegram,
         note,
       } = req.body as {
         coinId?: string;
@@ -769,6 +824,7 @@ async function startServer() {
         repeatMode?: TriggerRepeatMode;
         cooldownMinutes?: number;
         sendWhatsApp?: boolean;
+        sendTelegram?: boolean;
         note?: string;
       };
 
@@ -820,6 +876,7 @@ async function startServer() {
         cooldownMinutes: Math.max(1, Math.min(1440, Number(cooldownMinutes) || 60)),
         enabled: true,
         sendWhatsApp: typeof sendWhatsApp === 'boolean' ? sendWhatsApp : true,
+        sendTelegram: typeof sendTelegram === 'boolean' ? sendTelegram : false,
         note: note ? String(note).trim().slice(0, 140) : undefined,
         createdAt: new Date().toISOString(),
         triggerCount: 0,
@@ -846,6 +903,7 @@ async function startServer() {
       const patch = req.body as Partial<PriceTrigger> & { resetReference?: boolean };
       if (typeof patch.enabled === 'boolean') trig.enabled = patch.enabled;
       if (typeof patch.sendWhatsApp === 'boolean') trig.sendWhatsApp = patch.sendWhatsApp;
+      if (typeof patch.sendTelegram === 'boolean') trig.sendTelegram = patch.sendTelegram;
       if (typeof patch.targetValue === 'number' && Number.isFinite(patch.targetValue) && patch.targetValue > 0) {
         trig.targetValue = patch.targetValue;
       }
@@ -1034,6 +1092,31 @@ async function startServer() {
     }
   });
 
+  app.post('/api/telegram/send', async (req, res) => {
+    try {
+      const store = getStore();
+      const bodyTg = (req.body?.telegram ?? {}) as Partial<TelegramSettings>;
+      const merged: TelegramSettings = {
+        ...DEFAULT_TELEGRAM_SETTINGS,
+        ...(store.settings.telegram ?? {}),
+        ...bodyTg,
+      };
+      const text = String(req.body?.text ?? '').trim();
+      if (!text) {
+        return res.status(400).json({ error: 'Texto da mensagem é obrigatório.' });
+      }
+      const result = await sendTelegramMessage(merged, text, {
+        isPreformattedHtml: Boolean(req.body?.isPreformattedHtml),
+      });
+      if (!result.ok) {
+        return res.status(400).json({ error: result.error || 'Falha ao enviar Telegram.' });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao enviar Telegram.' });
+    }
+  });
+
   app.post('/api/sync', (req, res) => {
     try {
       const store = getStore();
@@ -1052,6 +1135,10 @@ async function startServer() {
           whatsapp: {
             ...DEFAULT_WHATSAPP_SETTINGS,
             ...(body.settings.whatsapp ?? {}),
+          },
+          telegram: {
+            ...DEFAULT_TELEGRAM_SETTINGS,
+            ...(body.settings.telegram ?? {}),
           },
         };
       }

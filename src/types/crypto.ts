@@ -129,6 +129,13 @@ export interface WhatsAppSettings {
   forwardAiSignals: boolean;
 }
 
+export interface TelegramSettings {
+  enabled: boolean;
+  botToken: string;
+  chatId: string;
+  forwardAiSignals: boolean;
+}
+
 export interface PriceTrigger {
   id: string;
   coinId: string;
@@ -142,11 +149,12 @@ export interface PriceTrigger {
   cooldownMinutes: number;
   enabled: boolean;
   sendWhatsApp: boolean;
+  sendTelegram?: boolean;
   note?: string;
   createdAt: string;
   lastTriggeredAt?: string;
   lastTriggeredPriceUsd?: number;
-  lastDeliveryStatus?: 'enviado' | 'falha' | 'sem_whatsapp';
+  lastDeliveryStatus?: 'enviado' | 'falha' | 'sem_whatsapp' | 'sem_canal';
   lastDeliveryError?: string;
   triggerCount: number;
 }
@@ -158,6 +166,7 @@ export interface AppSettings {
   minConfidenceForAlert: number;
   webhookUrl: string;
   whatsapp: WhatsAppSettings;
+  telegram?: TelegramSettings;
 }
 
 export interface ChartPoint {

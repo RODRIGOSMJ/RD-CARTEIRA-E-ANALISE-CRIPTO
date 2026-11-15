@@ -22,6 +22,7 @@ import type {
   PriceTrigger,
   SignalAlert,
   StudyCycleSummary,
+  TelegramSettings,
   WatchlistAsset,
   WhatsAppSettings,
 } from '../types/crypto.ts';
@@ -49,6 +50,13 @@ export const DEFAULT_CLOUD_WHATSAPP: WhatsAppSettings = {
   forwardAiSignals: true,
 };
 
+export const DEFAULT_CLOUD_TELEGRAM: TelegramSettings = {
+  enabled: false,
+  botToken: '',
+  chatId: '',
+  forwardAiSignals: true,
+};
+
 export const DEFAULT_CLOUD_SETTINGS: AppSettings = {
   autoStudyEnabled: true,
   intervalMinutes: 5,
@@ -56,6 +64,7 @@ export const DEFAULT_CLOUD_SETTINGS: AppSettings = {
   minConfidenceForAlert: 65,
   webhookUrl: '',
   whatsapp: DEFAULT_CLOUD_WHATSAPP,
+  telegram: DEFAULT_CLOUD_TELEGRAM,
 };
 
 export function toSafeDocId(rawId: string): string {
@@ -102,6 +111,16 @@ export function sanitizeWhatsAppSettings(w?: Partial<WhatsAppSettings>): WhatsAp
   };
 }
 
+export function sanitizeTelegramSettings(t?: Partial<TelegramSettings>): TelegramSettings {
+  return {
+    enabled: Boolean(t?.enabled),
+    botToken: clampStr(t?.botToken, 200),
+    chatId: clampStr(t?.chatId, 64),
+    forwardAiSignals:
+      typeof t?.forwardAiSignals === 'boolean' ? t.forwardAiSignals : true,
+  };
+}
+
 export function sanitizeSettings(s?: Partial<AppSettings>): AppSettings {
   return {
     autoStudyEnabled:
@@ -114,6 +133,7 @@ export function sanitizeSettings(s?: Partial<AppSettings>): AppSettings {
     ),
     webhookUrl: clampStr(s?.webhookUrl, 500),
     whatsapp: sanitizeWhatsAppSettings(s?.whatsapp),
+    telegram: sanitizeTelegramSettings(s?.telegram),
   };
 }
 
@@ -189,6 +209,7 @@ function buildTriggerPayload(uid: string, trig: PriceTrigger) {
     cooldownMinutes: Math.max(1, Math.min(1440, Math.round(Number(trig.cooldownMinutes) || 60))),
     enabled: Boolean(trig.enabled),
     sendWhatsApp: Boolean(trig.sendWhatsApp),
+    sendTelegram: Boolean(trig.sendTelegram),
     createdAtStr: clampNonEmptyStr(trig.createdAt, new Date().toISOString(), 48),
     triggerCount: Math.max(0, Math.round(Number(trig.triggerCount) || 0)),
     createdAt: serverTimestamp(),
@@ -207,7 +228,8 @@ function buildTriggerPayload(uid: string, trig: PriceTrigger) {
   if (
     trig.lastDeliveryStatus === 'enviado' ||
     trig.lastDeliveryStatus === 'falha' ||
-    trig.lastDeliveryStatus === 'sem_whatsapp'
+    trig.lastDeliveryStatus === 'sem_whatsapp' ||
+    trig.lastDeliveryStatus === 'sem_canal'
   ) {
     payload.lastDeliveryStatus = trig.lastDeliveryStatus;
   }
@@ -577,6 +599,7 @@ export function subscribeUserCloudWorkspace(
               cooldownMinutes: Number(v.cooldownMinutes) || 60,
               enabled: Boolean(v.enabled),
               sendWhatsApp: Boolean(v.sendWhatsApp),
+              sendTelegram: Boolean(v.sendTelegram),
               note: v.note ? String(v.note) : undefined,
               createdAt: String(v.createdAtStr || new Date().toISOString()),
               lastTriggeredAt: v.lastTriggeredAt ? String(v.lastTriggeredAt) : undefined,
@@ -844,6 +867,7 @@ export async function cloudUpdateTrigger(
 
   if (typeof patch.enabled === 'boolean') updateBody.enabled = patch.enabled;
   if (typeof patch.sendWhatsApp === 'boolean') updateBody.sendWhatsApp = patch.sendWhatsApp;
+  if (typeof patch.sendTelegram === 'boolean') updateBody.sendTelegram = patch.sendTelegram;
   if (typeof patch.targetValue === 'number' && patch.targetValue > 0) {
     updateBody.targetValue = patch.targetValue;
   }
