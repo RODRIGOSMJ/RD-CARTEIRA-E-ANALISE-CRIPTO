@@ -428,7 +428,7 @@ async function fetchLocalMarketSnapshots(
     let allFresh = true;
     for (const a of assets) {
       const c = localSnapshotCache.get(a.id);
-      if (c && now - c.fetchedAt < 10_000) {
+      if (c && now - c.fetchedAt < 4_500) {
         result[a.id] = c.data;
       } else {
         allFresh = false;

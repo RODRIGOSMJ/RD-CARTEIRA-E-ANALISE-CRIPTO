@@ -194,7 +194,7 @@ async function startServer() {
     }, intervalMs);
   }
 
-  // Periodic live price refresh every 10 seconds pushed via SSE and running 24/7 for active triggers
+  // Periodic live price refresh every 5 seconds pushed via SSE and running 24/7 for active triggers
   marketTimer = setInterval(async () => {
     const store = getStore();
     const hasActiveTriggers = store.priceTriggers.some((t) => t.enabled);
@@ -231,7 +231,7 @@ async function startServer() {
     } catch {
       // silent retry on next tick
     }
-  }, 10_000);
+  }, 5_000);
 
   // API Routes
   app.get('/api/state', async (req, res) => {

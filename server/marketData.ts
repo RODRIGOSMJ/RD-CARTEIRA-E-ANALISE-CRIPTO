@@ -17,7 +17,7 @@ const seriesCache = new Map<string, CachedSeries>();
 const snapshotCache = new Map<string, { data: MarketSnapshot; fetchedAt: number }>();
 let cachedUsdBrl = { rate: 5.75, fetchedAt: 0 };
 
-const SNAPSHOT_TTL_MS = 10_000;
+const SNAPSHOT_TTL_MS = 4_500;
 const SERIES_TTL_MS = 60_000;
 
 export async function getUsdBrlRate(): Promise<number> {

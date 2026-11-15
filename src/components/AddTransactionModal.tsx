@@ -19,6 +19,7 @@ interface AddTransactionModalProps {
   currency: 'USD' | 'BRL';
   usdBrlRate: number;
   preselectedCoinId?: string | null;
+  preselectedType?: TransactionType;
   onClose: () => void;
   onSubmit: (payload: {
     coinId: string;
@@ -46,10 +47,11 @@ export function AddTransactionModal({
   currency,
   usdBrlRate,
   preselectedCoinId,
+  preselectedType = 'compra',
   onClose,
   onSubmit,
 }: AddTransactionModalProps) {
-  const [txType, setTxType] = useState<TransactionType>('compra');
+  const [txType, setTxType] = useState<TransactionType>(preselectedType);
   const [selectedCoin, setSelectedCoin] = useState<{
     id: string;
     symbol: string;
@@ -83,6 +85,7 @@ export function AddTransactionModal({
     wasOpenRef.current = true;
     userEditedPriceRef.current = false;
 
+    setTxType(preselectedType);
     setError(null);
     setQuantity('');
     setFeeInput('0');
@@ -111,7 +114,7 @@ export function AddTransactionModal({
       setSelectedCoin(null);
       setPriceInput('');
     }
-  }, [open, preselectedCoinId, watchlist, snapshots, currency, usdBrlRate]);
+  }, [open, preselectedCoinId, preselectedType, watchlist, snapshots, currency, usdBrlRate]);
 
   useEffect(() => {
     const q = coinSearch.trim();

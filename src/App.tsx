@@ -12,6 +12,7 @@ import {
   LogOut,
   Moon,
   Plus,
+  RefreshCw,
   Search,
   Sparkles,
   Sun,
@@ -27,6 +28,7 @@ import { AddTriggerModal } from './components/AddTriggerModal.tsx';
 import { AssetDetailPanel } from './components/AssetDetailPanel.tsx';
 import { AutomationSettingsPanel } from './components/AutomationSettingsPanel.tsx';
 import { CryptoLogo } from './components/CryptoLogo.tsx';
+import { MonitorView } from './components/MonitorView.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { PortfolioView } from './components/PortfolioView.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
@@ -122,7 +124,69 @@ import {
 } from './utils/format.ts';
 import { playAlertChime, sendBrowserNotification } from './utils/notify.ts';
 
-type NavTab = 'painel' | 'carteira' | 'ativos' | 'autoestudo' | 'alertas';
+type NavTab = 'painel' | 'monitor' | 'carteira' | 'ativos' | 'autoestudo' | 'alertas';
+
+const VALID_NAV_TABS: readonly NavTab[] = [
+  'painel',
+  'monitor',
+  'carteira',
+  'ativos',
+  'autoestudo',
+  'alertas',
+];
+const ACTIVE_TAB_STORAGE_KEY = 'sinalcripto_active_tab_v1';
+const ALERTS_SUBTAB_STORAGE_KEY = 'sinalcripto_alerts_subtab_v1';
+const RIGHT_SETTINGS_SUBTAB_STORAGE_KEY = 'sinalcripto_right_settings_subtab_v1';
+const SELECTED_COIN_STORAGE_KEY = 'sinalcripto_selected_coin_v1';
+
+function isValidNavTab(val: string | null | undefined): val is NavTab {
+  return typeof val === 'string' && (VALID_NAV_TABS as readonly string[]).includes(val);
+}
+
+function getInitialNavTab(): NavTab {
+  if (typeof window === 'undefined') return 'painel';
+  const hashTab = window.location.hash.replace(/^#/, '').trim();
+  if (isValidNavTab(hashTab)) return hashTab;
+  try {
+    const sTab = sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+    if (isValidNavTab(sTab)) return sTab;
+    const lTab = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+    if (isValidNavTab(lTab)) return lTab;
+  } catch {
+    // ignore storage errors
+  }
+  return 'painel';
+}
+
+function getInitialStorageChoice<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback: T
+): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const sVal = sessionStorage.getItem(key);
+    if (sVal && (allowed as readonly string[]).includes(sVal)) return sVal as T;
+    const lVal = localStorage.getItem(key);
+    if (lVal && (allowed as readonly string[]).includes(lVal)) return lVal as T;
+  } catch {
+    // ignore storage errors
+  }
+  return fallback;
+}
+
+function getInitialSelectedCoinId(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return (
+      sessionStorage.getItem(SELECTED_COIN_STORAGE_KEY) ||
+      localStorage.getItem(SELECTED_COIN_STORAGE_KEY) ||
+      ''
+    );
+  } catch {
+    return '';
+  }
+}
 
 export default function App() {
   const { isDark, toggleTheme } = useTheme();
@@ -143,22 +207,34 @@ export default function App() {
   const [cloudIsStudying, setCloudIsStudying] = useState(false);
   const [cloudNextStudyAt, setCloudNextStudyAt] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<NavTab>('painel');
-  const [selectedCoinId, setSelectedCoinId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<NavTab>(getInitialNavTab);
+  const [selectedCoinId, setSelectedCoinId] = useState<string>(getInitialSelectedCoinId);
   const [signalFilter, setSignalFilter] = useState<'TODOS' | SignalAction>('TODOS');
   const [tableSearch, setTableSearch] = useState('');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [txModalOpen, setTxModalOpen] = useState(false);
   const [txPreselectedCoinId, setTxPreselectedCoinId] = useState<string | null>(null);
+  const [txPreselectedType, setTxPreselectedType] = useState<TransactionType>('compra');
   const [triggerModalOpen, setTriggerModalOpen] = useState(false);
   const [triggerPreselectedCoinId, setTriggerPreselectedCoinId] = useState<string | null>(null);
-  const [alertsSubTab, setAlertsSubTab] = useState<'triggers' | 'alerts'>('triggers');
-  const [rightSettingsTab, setRightSettingsTab] = useState<'whatsapp' | 'automacao'>('whatsapp');
+  const [alertsSubTab, setAlertsSubTab] = useState<'triggers' | 'alerts'>(() =>
+    getInitialStorageChoice(ALERTS_SUBTAB_STORAGE_KEY, ['triggers', 'alerts'], 'triggers')
+  );
+  const [rightSettingsTab, setRightSettingsTab] = useState<'whatsapp' | 'automacao'>(() =>
+    getInitialStorageChoice(
+      RIGHT_SETTINGS_SUBTAB_STORAGE_KEY,
+      ['whatsapp', 'automacao'],
+      'whatsapp'
+    )
+  );
   const [studyStatusMsg, setStudyStatusMsg] = useState<string | null>(null);
   const [liveBannerAlerts, setLiveBannerAlerts] = useState<SignalAlert[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [countdownLabel, setCountdownLabel] = useState<string>('');
   const [streamConnected, setStreamConnected] = useState(false);
+  const [lastMarketUpdateAt, setLastMarketUpdateAt] = useState<number>(() => Date.now());
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
 
   const cloudMenuRef = useRef<HTMLDivElement | null>(null);
   const localStateRef = useRef<AppStatePayload | null>(null);
@@ -248,6 +324,59 @@ export default function App() {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [cloudMenuOpen]);
+
+  // Persist active tab, subtabs, and selected coin across browser reloads / pull-to-refresh
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+      localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+    } catch {
+      // ignore storage errors
+    }
+    const targetHash = `#${activeTab}`;
+    if (window.location.hash !== targetHash) {
+      window.history.replaceState(null, '', targetHash);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hashTab = window.location.hash.replace(/^#/, '').trim();
+      if (isValidNavTab(hashTab)) {
+        setActiveTab(hashTab);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(ALERTS_SUBTAB_STORAGE_KEY, alertsSubTab);
+      localStorage.setItem(ALERTS_SUBTAB_STORAGE_KEY, alertsSubTab);
+    } catch {
+      // ignore storage errors
+    }
+  }, [alertsSubTab]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(RIGHT_SETTINGS_SUBTAB_STORAGE_KEY, rightSettingsTab);
+      localStorage.setItem(RIGHT_SETTINGS_SUBTAB_STORAGE_KEY, rightSettingsTab);
+    } catch {
+      // ignore storage errors
+    }
+  }, [rightSettingsTab]);
+
+  useEffect(() => {
+    if (!selectedCoinId) return;
+    try {
+      sessionStorage.setItem(SELECTED_COIN_STORAGE_KEY, selectedCoinId);
+      localStorage.setItem(SELECTED_COIN_STORAGE_KEY, selectedCoinId);
+    } catch {
+      // ignore storage errors
+    }
+  }, [selectedCoinId]);
 
   // Helper to collect union of watchlist, portfolio & trigger assets
   const buildTrackedAssetList = useCallback((workspace: CloudWorkspaceData): WatchlistAsset[] => {
@@ -349,7 +478,9 @@ export default function App() {
   const fetchInitialState = useCallback(async () => {
     try {
       const data = await apiGetState(true);
-      lastMarketTickAtRef.current = Date.now();
+      const nowTs = Date.now();
+      lastMarketTickAtRef.current = nowTs;
+      setLastMarketUpdateAt(nowTs);
       setLocalState(data);
       setError(null);
       if (getBackendMode() === 'local') {
@@ -396,7 +527,9 @@ export default function App() {
           triggers?: PriceTrigger[];
           portfolio: AppStatePayload['portfolio'];
         };
-        lastMarketTickAtRef.current = Date.now();
+        const nowTs = Date.now();
+        lastMarketTickAtRef.current = nowTs;
+        setLastMarketUpdateAt(nowTs);
         setStreamConnected(true);
         setLocalState((prev) =>
           prev
@@ -549,7 +682,9 @@ export default function App() {
       }
 
       const { snapshots, usdBrlRate } = await apiFetchSnapshotsForAssets(trackedAssets, true);
-      lastMarketTickAtRef.current = Date.now();
+      const nowTs = Date.now();
+      lastMarketTickAtRef.current = nowTs;
+      setLastMarketUpdateAt(nowTs);
       setCloudSnapshots(snapshots);
       setCloudUsdBrlRate(usdBrlRate);
       setStreamConnected(true);
@@ -613,7 +748,108 @@ export default function App() {
     void refreshCloudMarketTick();
   }, [cloudUser?.uid, cloudAssetSignature, Boolean(cloudData), refreshCloudMarketTick]);
 
-  // Guaranteed 10-second live price refresh for watchlist + portfolio (cloud + server backup + static mode)
+  const handleManualMarketRefresh = useCallback(async () => {
+    setManualRefreshing(true);
+    try {
+      if (cloudUser && cloudDataRef.current) {
+        await refreshCloudMarketTick();
+      } else {
+        const fresh = await apiGetState(true);
+        const nowTs = Date.now();
+        lastMarketTickAtRef.current = nowTs;
+        setLastMarketUpdateAt(nowTs);
+        setStreamConnected(true);
+        setLocalState((prev) =>
+          prev
+            ? {
+                ...prev,
+                snapshots: fresh.snapshots,
+                usdBrlRate: fresh.usdBrlRate,
+                accuracyStats: fresh.accuracyStats,
+                alerts: fresh.alerts,
+                triggers: fresh.triggers,
+                portfolio: fresh.portfolio,
+                analyses: fresh.analyses,
+                studyHistory: fresh.studyHistory,
+              }
+            : fresh
+        );
+      }
+    } catch {
+      // silent retry on next 5s tick
+    } finally {
+      setManualRefreshing(false);
+    }
+  }, [cloudUser, refreshCloudMarketTick]);
+
+  // Smooth touch Pull-to-Refresh: refreshes live quotes in place without leaving active tab
+  useEffect(() => {
+    let startY: number | null = null;
+    let startX = 0;
+    let pulled = 0;
+
+    const hasScrolledAncestor = (target: EventTarget | null): boolean => {
+      let el = target instanceof HTMLElement ? target : null;
+      while (el && el !== document.body) {
+        if (el.getAttribute('role') === 'dialog') return true;
+        if (el.scrollTop > 0) return true;
+        el = el.parentElement;
+      }
+      return false;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (window.scrollY > 2 || hasScrolledAncestor(e.target)) {
+        startY = null;
+        return;
+      }
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      pulled = 0;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (startY === null || e.touches.length !== 1) return;
+      if (window.scrollY > 2) {
+        startY = null;
+        pulled = 0;
+        setPullDistance(0);
+        return;
+      }
+      const dy = e.touches[0].clientY - startY;
+      const dx = e.touches[0].clientX - startX;
+      if (dy > 14 && Math.abs(dy) > Math.abs(dx) * 1.4) {
+        pulled = Math.min(84, Math.round((dy - 14) * 0.65));
+        setPullDistance(pulled);
+      } else if (dy <= 0) {
+        pulled = 0;
+        setPullDistance(0);
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (pulled >= 56) {
+        void handleManualMarketRefresh();
+      }
+      startY = null;
+      pulled = 0;
+      setPullDistance(0);
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [handleManualMarketRefresh]);
+
+  // Guaranteed 5-second live price refresh for watchlist, monitor & portfolio (cloud + server backup + static mode)
   useEffect(() => {
     if (loading) return;
     const timer = setInterval(async () => {
@@ -623,13 +859,15 @@ export default function App() {
       }
 
       const elapsed = Date.now() - lastMarketTickAtRef.current;
-      // If SSE just delivered a fresh tick (< 9s), skip redundant poll
-      if (getBackendMode() === 'server' && elapsed < 9_000) {
+      // If SSE just delivered a fresh tick (< 4.5s), skip redundant poll
+      if (getBackendMode() === 'server' && elapsed < 4_500) {
         return;
       }
       try {
         const fresh = await apiGetState(true);
-        lastMarketTickAtRef.current = Date.now();
+        const nowTs = Date.now();
+        lastMarketTickAtRef.current = nowTs;
+        setLastMarketUpdateAt(nowTs);
         setStreamConnected(true);
         setLocalState((prev) =>
           prev
@@ -647,9 +885,9 @@ export default function App() {
             : fresh
         );
       } catch {
-        // silent retry on next 10s cycle
+        // silent retry on next 5s cycle
       }
-    }, 10_000);
+    }, 5_000);
 
     return () => clearInterval(timer);
   }, [loading, cloudUser, refreshCloudMarketTick]);
@@ -1174,8 +1412,9 @@ export default function App() {
     }
   }
 
-  function openTransactionModal(coinId?: string) {
+  function openTransactionModal(coinId?: string, txType: TransactionType = 'compra') {
     setTxPreselectedCoinId(coinId ?? null);
+    setTxPreselectedType(txType);
     setTxModalOpen(true);
   }
 
@@ -1347,6 +1586,35 @@ export default function App() {
     [state?.watchlist]
   );
 
+  const monitorAssets = useMemo(() => {
+    if (!state) return [];
+    const map = new Map<string, WatchlistAsset>();
+    for (const w of state.watchlist) map.set(w.id, w);
+    for (const h of state.portfolio.holdings) {
+      if (!map.has(h.coinId)) {
+        map.set(h.coinId, {
+          id: h.coinId,
+          symbol: h.symbol.toUpperCase(),
+          name: h.name,
+          binanceSymbol: `${h.symbol.toUpperCase()}USDT`,
+          addedAt: new Date(0).toISOString(),
+        });
+      }
+    }
+    for (const t of state.triggers ?? []) {
+      if (!map.has(t.coinId)) {
+        map.set(t.coinId, {
+          id: t.coinId,
+          symbol: t.symbol.toUpperCase(),
+          name: t.name,
+          binanceSymbol: `${t.symbol.toUpperCase()}USDT`,
+          addedAt: t.createdAt,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [state]);
+
   const renderOutcomeText = (alert: SignalAlert) => {
     if (alert.outcome === 'acerto') {
       return (
@@ -1390,11 +1658,12 @@ export default function App() {
             SinalCripto IA
           </button>
 
-          {/* Zone 2: 5 concise single-line nav links */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium">
+          {/* Zone 2: Concise single-line nav links */}
+          <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-sm font-medium">
             {(
               [
                 { id: 'painel', label: 'Painel' },
+                { id: 'monitor', label: 'Monitor' },
                 { id: 'carteira', label: 'Carteira' },
                 { id: 'ativos', label: 'Ativos' },
                 { id: 'autoestudo', label: 'Autoestudo' },
@@ -1541,6 +1810,7 @@ export default function App() {
         {(
           [
             { id: 'painel', label: 'Painel' },
+            { id: 'monitor', label: 'Monitor' },
             { id: 'carteira', label: 'Carteira' },
             { id: 'ativos', label: 'Ativos' },
             { id: 'autoestudo', label: 'Autoestudo' },
@@ -1564,6 +1834,22 @@ export default function App() {
           </button>
         ))}
       </div>
+
+      {/* Pull-to-refresh feedback strip (keeps active page intact while refreshing quotes) */}
+      {(pullDistance > 0 || manualRefreshing) && (
+        <div className="border-b border-sky-200 dark:border-sky-500/20 bg-sky-50/90 dark:bg-[#0F172A] px-4 py-2 flex items-center justify-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300 transition-all">
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${manualRefreshing ? 'animate-spin' : ''}`}
+          />
+          <span>
+            {manualRefreshing
+              ? 'Atualizando cotações ao vivo...'
+              : pullDistance >= 56
+              ? 'Solte para atualizar as cotações'
+              : 'Puxe para atualizar as cotações'}
+          </span>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -1631,7 +1917,7 @@ export default function App() {
             </h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
               <span>
-                {streamConnected ? 'Tempo real ativo (10s)' : 'Sincronizando mercado'}
+                {streamConnected ? 'Tempo real ativo (5s)' : 'Sincronizando mercado'}
               </span>
               <span aria-hidden="true">·</span>
               <span className="font-mono tabular-nums">
@@ -2221,6 +2507,25 @@ export default function App() {
               </div>
             )}
 
+            {/* VIEW: MONITOR DE COTAÇÕES (Cards Fracionados em Tempo Real 5s) */}
+            {activeTab === 'monitor' && (
+              <MonitorView
+                assets={monitorAssets}
+                snapshots={state.snapshots}
+                currency={state.settings.currency}
+                usdBrlRate={state.usdBrlRate}
+                lastUpdatedAt={lastMarketUpdateAt}
+                isRefreshing={manualRefreshing}
+                onManualRefresh={() => void handleManualMarketRefresh()}
+                onOpenAddAsset={() => setAddModalOpen(true)}
+                onLaunchGain={(coinId) => openTransactionModal(coinId, 'ganho')}
+                onSelectAsset={(coinId) => {
+                  setSelectedCoinId(coinId);
+                  setActiveTab('painel');
+                }}
+              />
+            )}
+
             {/* VIEW: CARTEIRA (Mirror CoinMarketCap Portfolio) */}
             {activeTab === 'carteira' && (
               <PortfolioView
@@ -2744,6 +3049,7 @@ export default function App() {
           currency={state.settings.currency}
           usdBrlRate={state.usdBrlRate}
           preselectedCoinId={txPreselectedCoinId}
+          preselectedType={txPreselectedType}
           onClose={() => setTxModalOpen(false)}
           onSubmit={handleAddTransaction}
         />
