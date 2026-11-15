@@ -25,6 +25,12 @@ import {
   calculateRSIArray,
   computeTechnicalIndicators,
 } from '../utils/indicators.ts';
+import {
+  formatCallMeBotError,
+  isCallMeBotBodyError,
+  looksLikePhoneInsteadOfCallMeBotKey,
+  normalizeWhatsAppPhone,
+} from '../utils/whatsappFormat.ts';
 
 export class BackendUnavailableError extends Error {
   constructor(message = 'Servidor de API indisponível neste ambiente') {
@@ -36,6 +42,7 @@ export class BackendUnavailableError extends Error {
 export type ClientBackendMode = 'server' | 'local';
 
 let currentMode: ClientBackendMode = 'server';
+let whatsAppRelayAvailable: boolean | null = null;
 
 export function getBackendMode(): ClientBackendMode {
   return currentMode;
@@ -1062,26 +1069,48 @@ async function sendLocalWhatsAppMessage(
   whatsapp: WhatsAppSettings,
   text: string,
   metadata?: unknown
-): Promise<{ ok: boolean; error?: string }> {
-  const phoneDigits = String(whatsapp.phoneNumber || '').replace(/\D/g, '');
+): Promise<{ ok: boolean; error?: string; opaqueStatic?: boolean }> {
+  const phoneDigits = normalizeWhatsAppPhone(whatsapp.phoneNumber).digits;
   if (whatsapp.provider === 'callmebot') {
-    if (phoneDigits.length < 10 || !whatsapp.callMeBotApiKey.trim()) {
-      return { ok: false, error: 'Configure o número com DDI e a API Key do CallMeBot.' };
-    }
-    try {
-      const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(
-        phoneDigits
-      )}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(
-        whatsapp.callMeBotApiKey.trim()
-      )}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) return { ok: false, error: `CallMeBot HTTP ${res.status}` };
-      return { ok: true };
-    } catch {
+    const apiKey = whatsapp.callMeBotApiKey.trim();
+    if (phoneDigits.length < 11 || !apiKey) {
       return {
         ok: false,
-        error: 'No modo estático sem servidor Node, o navegador bloqueou CORS do CallMeBot. Use o servidor ativo ou um gateway REST com CORS.',
+        error: 'Configure o número com DDI + DDD (ex: +5538991292495) e a API Key do CallMeBot.',
       };
+    }
+    if (looksLikePhoneInsteadOfCallMeBotKey(whatsapp.phoneNumber, apiKey)) {
+      return {
+        ok: false,
+        error:
+          'O campo "CallMeBot API Key" contém um número de telefone, não a API Key. Envie "I allow callmebot to send me messages" para +34 644 71 81 99 no WhatsApp e cole aqui o código curto recebido.',
+      };
+    }
+
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(
+      phoneDigits
+    )}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(apiKey)}`;
+
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      const body = await res.text().catch(() => '');
+      if (!res.ok || isCallMeBotBodyError(body)) {
+        return { ok: false, error: formatCallMeBotError(body, res.status) };
+      }
+      return { ok: true };
+    } catch {
+      // Browser CORS blocks reading CallMeBot response on pure static hosts without /api serverless relay.
+      // Dispatch via no-cors GET so CallMeBot still receives the delivery request over HTTPS.
+      try {
+        await fetch(url, { mode: 'no-cors', signal: AbortSignal.timeout(8000) });
+        return { ok: true, opaqueStatic: true };
+      } catch {
+        return {
+          ok: false,
+          error:
+            'Não foi possível conectar ao CallMeBot pelo navegador. Verifique sua conexão ou use um gateway REST.',
+        };
+      }
     }
   }
 
@@ -1426,23 +1455,25 @@ export async function apiDispatchWhatsApp(
   whatsapp: WhatsAppSettings,
   text: string,
   metadata?: unknown
-): Promise<{ ok: boolean; error?: string }> {
-  return withFallback<{ ok: boolean; error?: string }>(
-    async () => {
-      try {
-        await safeFetchJson<{ ok: boolean }>('/api/whatsapp/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ whatsapp, text, metadata }),
-        });
-        return { ok: true };
-      } catch (err: any) {
-        if (err instanceof BackendUnavailableError) throw err;
+): Promise<{ ok: boolean; error?: string; opaqueStatic?: boolean }> {
+  if (whatsAppRelayAvailable !== false) {
+    try {
+      await safeFetchJson<{ ok: boolean }>('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whatsapp, text, metadata }),
+      });
+      whatsAppRelayAvailable = true;
+      return { ok: true };
+    } catch (err: any) {
+      if (!(err instanceof BackendUnavailableError)) {
+        whatsAppRelayAvailable = true;
         return { ok: false, error: err?.message || 'Falha ao enviar WhatsApp.' };
       }
-    },
-    () => sendLocalWhatsAppMessage(whatsapp, text, metadata)
-  );
+      whatsAppRelayAvailable = false;
+    }
+  }
+  return sendLocalWhatsAppMessage(whatsapp, text, metadata);
 }
 
 export async function apiRunCloudStudy(params: {
@@ -1892,25 +1923,35 @@ export async function apiUpdateSettings(
   );
 }
 
-export async function apiTestWhatsApp(whatsapp: WhatsAppSettings): Promise<void> {
-  return withFallback(
-    async () => {
+export async function apiTestWhatsApp(
+  whatsapp: WhatsAppSettings
+): Promise<{ opaqueStatic?: boolean }> {
+  if (whatsAppRelayAvailable !== false) {
+    try {
       await safeFetchJson<{ ok: boolean }>('/api/whatsapp/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ whatsapp }),
       });
-    },
-    async () => {
-      const r = await sendLocalWhatsAppMessage(
-        whatsapp,
-        '*SinalCripto IA — Teste de Conexão*\n\nSeu WhatsApp respondeu ao teste.'
-      );
-      if (!r.ok) {
-        throw new Error(r.error || 'Falha ao enviar teste para o WhatsApp.');
+      whatsAppRelayAvailable = true;
+      return {};
+    } catch (err: any) {
+      if (!(err instanceof BackendUnavailableError)) {
+        whatsAppRelayAvailable = true;
+        throw err;
       }
+      whatsAppRelayAvailable = false;
     }
+  }
+
+  const r = await sendLocalWhatsAppMessage(
+    whatsapp,
+    '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos e sinais da IA.'
   );
+  if (!r.ok) {
+    throw new Error(r.error || 'Falha ao enviar teste para o WhatsApp.');
+  }
+  return { opaqueStatic: r.opaqueStatic };
 }
 
 export async function apiTestWebhook(webhookUrl: string): Promise<void> {

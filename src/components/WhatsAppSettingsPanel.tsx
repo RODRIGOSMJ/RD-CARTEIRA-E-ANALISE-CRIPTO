@@ -1,15 +1,45 @@
-import { Check, Loader2, MessageSquare, Send } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { AlertTriangle, Check, ExternalLink, Loader2, MessageSquare, Send } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiTestWhatsApp } from '../services/apiClient.ts';
 import type {
   AppSettings,
   WhatsAppProvider,
   WhatsAppSettings,
 } from '../types/crypto.ts';
+import {
+  looksLikePhoneInsteadOfCallMeBotKey,
+  normalizeWhatsAppPhone,
+} from '../utils/whatsappFormat.ts';
 
 interface WhatsAppSettingsPanelProps {
   whatsapp: WhatsAppSettings;
   onUpdateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+const CALLMEBOT_ACTIVATION_URL =
+  'https://wa.me/34644718199?text=' +
+  encodeURIComponent('I allow callmebot to send me messages');
+
+function hasRequiredCredentials(w: WhatsAppSettings): boolean {
+  const { digits } = normalizeWhatsAppPhone(w.phoneNumber);
+  if (w.provider === 'callmebot') {
+    return (
+      digits.length >= 11 &&
+      w.callMeBotApiKey.trim().length > 0 &&
+      !looksLikePhoneInsteadOfCallMeBotKey(w.phoneNumber, w.callMeBotApiKey)
+    );
+  }
+  if (w.provider === 'webhook_rest') {
+    return w.customWebhookUrl.trim().startsWith('http');
+  }
+  if (w.provider === 'meta_cloud') {
+    return (
+      digits.length >= 11 &&
+      w.metaPhoneNumberId.trim().length > 0 &&
+      w.metaAccessToken.trim().length > 0
+    );
+  }
+  return false;
 }
 
 export function WhatsAppSettingsPanel({
@@ -28,6 +58,18 @@ export function WhatsAppSettingsPanel({
     setDraft(whatsapp);
   }, [whatsapp]);
 
+  const normalizedPhone = useMemo(
+    () => normalizeWhatsAppPhone(draft.phoneNumber),
+    [draft.phoneNumber]
+  );
+
+  const keyLooksLikePhone = useMemo(
+    () =>
+      draft.provider === 'callmebot' &&
+      looksLikePhoneInsteadOfCallMeBotKey(draft.phoneNumber, draft.callMeBotApiKey),
+    [draft.provider, draft.phoneNumber, draft.callMeBotApiKey]
+  );
+
   const setField = <K extends keyof WhatsAppSettings>(
     key: K,
     val: WhatsAppSettings[K]
@@ -35,14 +77,37 @@ export function WhatsAppSettingsPanel({
     setDraft((prev) => ({ ...prev, [key]: val }));
   };
 
+  function prepareNormalizedDraft(autoActivateIfReady: boolean): WhatsAppSettings {
+    const phone = normalizeWhatsAppPhone(draft.phoneNumber);
+    const nextPhone =
+      phone.autoAppliedBrDdi && phone.e164 ? phone.e164 : draft.phoneNumber.trim();
+    const cleaned: WhatsAppSettings = {
+      ...draft,
+      phoneNumber: nextPhone,
+      callMeBotApiKey: draft.callMeBotApiKey.trim(),
+      customWebhookUrl: draft.customWebhookUrl.trim(),
+      customWebhookToken: draft.customWebhookToken.trim(),
+      metaPhoneNumberId: draft.metaPhoneNumberId.trim(),
+      metaAccessToken: draft.metaAccessToken.trim(),
+    };
+    if (autoActivateIfReady && !cleaned.enabled && hasRequiredCredentials(cleaned)) {
+      cleaned.enabled = true;
+    }
+    return cleaned;
+  }
+
   async function handleSave() {
     setSaving(true);
     setStatusMsg(null);
     try {
-      await onUpdateSettings({ whatsapp: draft });
+      const prepared = prepareNormalizedDraft(true);
+      setDraft(prepared);
+      await onUpdateSettings({ whatsapp: prepared });
       setStatusMsg({
         type: 'ok',
-        text: 'Configuração de WhatsApp 24h salva com sucesso.',
+        text: prepared.enabled
+          ? 'Configuração salva e WhatsApp 24h ativado com sucesso.'
+          : 'Configuração de WhatsApp 24h salva com sucesso.',
       });
     } catch (err: any) {
       setStatusMsg({
@@ -72,11 +137,23 @@ export function WhatsAppSettingsPanel({
     setTesting(true);
     setStatusMsg(null);
     try {
-      await onUpdateSettings({ whatsapp: draft });
-      await apiTestWhatsApp(draft);
+      const prepared = prepareNormalizedDraft(false);
+      setDraft(prepared);
+      await onUpdateSettings({ whatsapp: prepared });
+      const res = await apiTestWhatsApp(prepared);
+
+      // Automatically activate WhatsApp 24h after a successful test
+      if (!prepared.enabled) {
+        const activated = { ...prepared, enabled: true };
+        setDraft(activated);
+        await onUpdateSettings({ whatsapp: activated });
+      }
+
       setStatusMsg({
         type: 'ok',
-        text: 'Mensagem de teste enviada para seu WhatsApp.',
+        text: res.opaqueStatic
+          ? 'Solicitação de teste enviada ao CallMeBot. Confira se a mensagem chegou no seu WhatsApp em alguns segundos.'
+          : 'Mensagem de teste enviada para seu WhatsApp e alertas 24h ativados!',
       });
     } catch (err: any) {
       setStatusMsg({
@@ -152,22 +229,41 @@ export function WhatsAppSettingsPanel({
           type="tel"
           value={draft.phoneNumber}
           onChange={(e) => setField('phoneNumber', e.target.value)}
-          placeholder="+5511999999999"
+          placeholder="+5538991292495"
           className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
         />
+        {normalizedPhone.digits && (
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+            Envio para: <span className="text-slate-800 dark:text-slate-200">{normalizedPhone.e164}</span>
+            {normalizedPhone.autoAppliedBrDdi && (
+              <span className="font-sans text-emerald-700 dark:text-emerald-400 ml-1.5">
+                (DDI +55 do Brasil adicionado automaticamente)
+              </span>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Provider-specific fields */}
       {draft.provider === 'callmebot' && (
         <div className="space-y-3">
-          <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] px-3.5 py-2.5 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed space-y-1">
+          <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] px-3.5 py-2.5 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed space-y-2">
             <p className="font-semibold text-slate-900 dark:text-slate-100">
               Ativação gratuita em 30 segundos (CallMeBot):
             </p>
             <p>
               1. Salve o contato <span className="font-mono text-emerald-700 dark:text-emerald-400">+34 644 71 81 99</span> no WhatsApp e envie: <span className="font-mono text-slate-900 dark:text-slate-100">I allow callmebot to send me messages</span>
             </p>
-            <p>2. Cole abaixo a API Key que o bot responder no seu WhatsApp.</p>
+            <a
+              href={CALLMEBOT_ACTIVATION_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-medium transition-colors"
+            >
+              <ExternalLink className="w-3 h-3 shrink-0" />
+              Abrir WhatsApp do CallMeBot para pegar API Key
+            </a>
+            <p>2. Cole abaixo a API Key curta (ex: 1234567) que o bot responder no seu WhatsApp.</p>
           </div>
           <div>
             <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
@@ -180,6 +276,14 @@ export function WhatsAppSettingsPanel({
               placeholder="Ex: 1234567"
               className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
             />
+            {keyLooksLikePhone && (
+              <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/25 rounded-md px-2.5 py-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Esse número parece o seu telefone, não a API Key. Use o botão acima para enviar a frase no WhatsApp e cole o código curto de 6–7 dígitos que o bot responder.
+                </span>
+              </p>
+            )}
           </div>
         </div>
       )}

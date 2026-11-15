@@ -5,6 +5,12 @@ import type {
   SignalAlert,
   WhatsAppSettings,
 } from '../src/types/crypto.ts';
+import {
+  formatCallMeBotError,
+  isCallMeBotBodyError,
+  looksLikePhoneInsteadOfCallMeBotKey,
+  normalizeWhatsAppPhone,
+} from '../src/utils/whatsappFormat.ts';
 import { getStore, saveStore } from './store.ts';
 
 function formatUsdForMsg(usd: number): string {
@@ -27,21 +33,25 @@ function formatBrlForMsg(usd: number, rate: number): string {
 }
 
 export function normalizePhoneDigits(phone: string): string {
-  return String(phone || '').replace(/\D/g, '');
+  return normalizeWhatsAppPhone(phone).digits;
 }
 
 export function isWhatsAppConfigured(w?: WhatsAppSettings): boolean {
   if (!w || !w.enabled) return false;
   const phone = normalizePhoneDigits(w.phoneNumber);
   if (w.provider === 'callmebot') {
-    return phone.length >= 10 && w.callMeBotApiKey.trim().length > 0;
+    return (
+      phone.length >= 11 &&
+      w.callMeBotApiKey.trim().length > 0 &&
+      !looksLikePhoneInsteadOfCallMeBotKey(w.phoneNumber, w.callMeBotApiKey)
+    );
   }
   if (w.provider === 'webhook_rest') {
     return w.customWebhookUrl.trim().startsWith('http');
   }
   if (w.provider === 'meta_cloud') {
     return (
-      phone.length >= 10 &&
+      phone.length >= 11 &&
       w.metaPhoneNumberId.trim().length > 0 &&
       w.metaAccessToken.trim().length > 0
     );
@@ -57,12 +67,22 @@ export async function sendWhatsAppMessage(
   const phoneDigits = normalizePhoneDigits(whatsapp.phoneNumber);
 
   if (whatsapp.provider === 'callmebot') {
-    if (phoneDigits.length < 10) {
-      return { ok: false, error: 'Informe um número de WhatsApp válido com DDI (ex: +5511999999999).' };
+    if (phoneDigits.length < 11) {
+      return {
+        ok: false,
+        error: 'Informe um número de WhatsApp válido com DDI + DDD (ex: +5538991292495).',
+      };
     }
     const apiKey = whatsapp.callMeBotApiKey.trim();
     if (!apiKey) {
       return { ok: false, error: 'Informe a API Key do CallMeBot para envio automático.' };
+    }
+    if (looksLikePhoneInsteadOfCallMeBotKey(whatsapp.phoneNumber, apiKey)) {
+      return {
+        ok: false,
+        error:
+          'O campo "CallMeBot API Key" parece conter um número de telefone, não a API Key. Envie "I allow callmebot to send me messages" para +34 644 71 81 99 no WhatsApp e cole aqui o código curto recebido.',
+      };
     }
     try {
       const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(
@@ -70,11 +90,10 @@ export async function sendWhatsAppMessage(
       )}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(apiKey)}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       const body = await res.text();
-      const lower = body.toLowerCase();
-      if (!res.ok || lower.includes('error') || lower.includes('invalid') || lower.includes('not allowed')) {
+      if (!res.ok || isCallMeBotBodyError(body)) {
         return {
           ok: false,
-          error: body.slice(0, 160) || `CallMeBot respondeu HTTP ${res.status}`,
+          error: formatCallMeBotError(body, res.status),
         };
       }
       return { ok: true };
