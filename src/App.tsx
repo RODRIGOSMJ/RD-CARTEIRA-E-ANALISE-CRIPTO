@@ -38,6 +38,7 @@ import { Sparkline } from './components/Sparkline.tsx';
 import { TelegramSettingsPanel } from './components/TelegramSettingsPanel.tsx';
 import { TriggersPanel } from './components/TriggersPanel.tsx';
 import { WhatsAppSettingsPanel } from './components/WhatsAppSettingsPanel.tsx';
+import { protectStoredAnalyses } from './utils/verdictPolicy.ts';
 import {
   auth,
   firebaseAuthDomainsSettingsUrl,
@@ -1618,11 +1619,20 @@ export default function App() {
     }
   }
 
+  const protectedAnalyses = useMemo(() => {
+    if (!state) return {};
+    return protectStoredAnalyses(
+      state.analyses,
+      state.snapshots,
+      state.portfolio.holdings
+    );
+  }, [state]);
+
   const filteredAssets = useMemo(() => {
     if (!state) return [];
     const q = tableSearch.trim().toLowerCase();
     return state.watchlist.filter((asset) => {
-      const analysis = state.analyses[asset.id];
+      const analysis = protectedAnalyses[asset.id];
       if (signalFilter !== 'TODOS') {
         if (!analysis || analysis.action !== signalFilter) return false;
       }
@@ -1634,7 +1644,7 @@ export default function App() {
       }
       return true;
     });
-  }, [state, signalFilter, tableSearch]);
+  }, [state, protectedAnalyses, signalFilter, tableSearch]);
 
   const counts = useMemo(() => {
     if (!state) return { buy: 0, sell: 0, hold: 0, unread: 0 };
@@ -1642,14 +1652,14 @@ export default function App() {
     let sell = 0;
     let hold = 0;
     for (const asset of state.watchlist) {
-      const a = state.analyses[asset.id];
+      const a = protectedAnalyses[asset.id];
       if (a?.action === 'COMPRAR') buy++;
       else if (a?.action === 'VENDER') sell++;
       else if (a?.action === 'ESPERAR') hold++;
     }
     const unread = state.alerts.filter((al) => !al.read).length;
     return { buy, sell, hold, unread };
-  }, [state]);
+  }, [state, protectedAnalyses]);
 
   const selectedAsset =
     state?.watchlist.find((a) => a.id === selectedCoinId) ??
@@ -2163,7 +2173,7 @@ export default function App() {
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
                     {state.watchlist
-                      .filter((w) => state.analyses[w.id]?.action === 'COMPRAR')
+                      .filter((w) => protectedAnalyses[w.id]?.action === 'COMPRAR')
                       .map((w) => w.symbol)
                       .slice(0, 4)
                       .join(', ') || 'Nenhum momento'}
@@ -2179,7 +2189,7 @@ export default function App() {
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
                     {state.watchlist
-                      .filter((w) => state.analyses[w.id]?.action === 'VENDER')
+                      .filter((w) => protectedAnalyses[w.id]?.action === 'VENDER')
                       .map((w) => w.symbol)
                       .slice(0, 4)
                       .join(', ') || 'Nenhum momento'}
@@ -2212,8 +2222,8 @@ export default function App() {
                 {/* Left 8 columns: Watchlist table + Selected Asset Detail */}
                 <div className="xl:col-span-8 space-y-6">
                   <section className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
+                    <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07] max-w-full overflow-x-auto">
                         {(
                           [
                             { id: 'TODOS', label: 'Todos' },
@@ -2226,7 +2236,7 @@ export default function App() {
                             key={tab.id}
                             type="button"
                             onClick={() => setSignalFilter(tab.id)}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                            className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
                               signalFilter === tab.id
                                 ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs dark:shadow-none'
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -2237,7 +2247,7 @@ export default function App() {
                         ))}
                       </div>
 
-                      <div className="relative min-w-[200px] flex-1 sm:flex-initial">
+                      <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:flex-initial">
                         <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <input
                           type="text"
@@ -2291,7 +2301,7 @@ export default function App() {
                             ) : (
                               filteredAssets.map((asset) => {
                                 const snap = state.snapshots[asset.id];
-                                const analysis = state.analyses[asset.id];
+                                const analysis = protectedAnalyses[asset.id];
                                 const isSelected = selectedAsset?.id === asset.id;
 
                                 return (
@@ -2412,7 +2422,7 @@ export default function App() {
                               ) : (
                                 filteredAssets.map((asset) => {
                                   const snap = state.snapshots[asset.id];
-                                  const analysis = state.analyses[asset.id];
+                                  const analysis = protectedAnalyses[asset.id];
                                   const isSelected = selectedAsset?.id === asset.id;
 
                                   return (
@@ -2524,7 +2534,7 @@ export default function App() {
                     <AssetDetailPanel
                       asset={selectedAsset}
                       snapshot={state.snapshots[selectedAsset.id]}
-                      analysis={state.analyses[selectedAsset.id]}
+                      analysis={protectedAnalyses[selectedAsset.id]}
                       holding={state.portfolio.holdings.find(
                         (h) => h.coinId === selectedAsset.id
                       )}
@@ -2737,7 +2747,7 @@ export default function App() {
               <PortfolioView
                 portfolio={state.portfolio}
                 snapshots={state.snapshots}
-                analyses={state.analyses}
+                analyses={protectedAnalyses}
                 currency={state.settings.currency}
                 usdBrlRate={state.usdBrlRate}
                 onOpenAddTransaction={(coinId) => openTransactionModal(coinId)}
@@ -2799,7 +2809,7 @@ export default function App() {
                       <div className="sm:hidden divide-y divide-slate-200 dark:divide-white/[0.06]">
                         {state.watchlist.map((asset) => {
                           const snap = state.snapshots[asset.id];
-                          const analysis = state.analyses[asset.id];
+                          const analysis = protectedAnalyses[asset.id];
                           return (
                             <div key={asset.id} className="p-4 space-y-3 text-xs">
                               <div className="flex items-start justify-between gap-2">
@@ -2930,7 +2940,7 @@ export default function App() {
                         <tbody className="divide-y divide-slate-200/80 dark:divide-white/[0.05] text-xs">
                           {state.watchlist.map((asset) => {
                             const snap = state.snapshots[asset.id];
-                            const analysis = state.analyses[asset.id];
+                            const analysis = protectedAnalyses[asset.id];
                             return (
                               <tr key={asset.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                                 <td className="py-3.5 px-4 lg:px-5">

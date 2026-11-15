@@ -3,6 +3,7 @@ import type {
   SignalAlert,
   TelegramSettings,
 } from '../src/types/crypto.ts';
+import { getVerdictBadgeMeta } from '../src/utils/verdictPolicy.ts';
 
 function formatUsdForMsg(usd: number): string {
   if (!Number.isFinite(usd)) return 'US$ 0,00';
@@ -133,10 +134,11 @@ export function formatAiAlertsTelegramHtml(
   usdBrlRate: number
 ): string {
   const header = `<b>SinalCripto IA — Novo Sinal Automático</b>`;
-  const blocks = alerts.map((a) =>
-    [
+  const blocks = alerts.map((a) => {
+    const verdictLabel = getVerdictBadgeMeta(a.action, { headline: a.headline }).label;
+    return [
       `<b>${escapeTelegramHtml(a.symbol)} (${escapeTelegramHtml(a.name)}): ${escapeTelegramHtml(
-        a.action
+        verdictLabel
       )}</b> (Confiança ${a.confidence}%)`,
       `Preço: ${escapeTelegramHtml(formatUsdForMsg(a.priceAtSignalUsd))} (${escapeTelegramHtml(
         formatBrlForMsg(a.priceAtSignalUsd, usdBrlRate)
@@ -145,8 +147,8 @@ export function formatAiAlertsTelegramHtml(
         formatUsdForMsg(a.stopLossUsd)
       )}`,
       escapeTelegramHtml(a.headline),
-    ].join('\n')
-  );
+    ].join('\n');
+  });
   return `${header}\n\n${blocks.join('\n\n')}`;
 }
 

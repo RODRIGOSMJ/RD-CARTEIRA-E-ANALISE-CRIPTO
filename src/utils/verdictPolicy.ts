@@ -1,4 +1,5 @@
 import type {
+  AIAnalysisResult,
   MarketSnapshot,
   PortfolioHolding,
   SignalAction,
@@ -132,6 +133,45 @@ export function applyPortfolioProtectionPolicy(
     canSellForProfit,
     isAccumulationZone,
   };
+}
+
+export function protectStoredAnalyses(
+  analyses: Record<string, AIAnalysisResult>,
+  snapshots: Record<string, MarketSnapshot>,
+  holdings: PortfolioHolding[] = []
+): Record<string, AIAnalysisResult> {
+  const result: Record<string, AIAnalysisResult> = {};
+  for (const [coinId, analysis] of Object.entries(analyses || {})) {
+    const snap = snapshots[coinId];
+    if (!snap) {
+      result[coinId] = analysis;
+      continue;
+    }
+    const holding = holdings.find((h) => h.coinId === coinId);
+    const protectedVerdict = applyPortfolioProtectionPolicy({
+      rawAction: analysis.action,
+      snap,
+      holding,
+      headline: analysis.headline,
+      thesis: analysis.thesis,
+      portfolioAdvice: analysis.portfolioAdvice,
+    });
+    if (
+      protectedVerdict.action === analysis.action &&
+      protectedVerdict.headline === analysis.headline
+    ) {
+      result[coinId] = analysis;
+    } else {
+      result[coinId] = {
+        ...analysis,
+        action: protectedVerdict.action,
+        headline: protectedVerdict.headline,
+        thesis: protectedVerdict.thesis,
+        portfolioAdvice: protectedVerdict.portfolioAdvice,
+      };
+    }
+  }
+  return result;
 }
 
 export function getVerdictBadgeMeta(

@@ -11,6 +11,7 @@ import {
   looksLikePhoneInsteadOfCallMeBotKey,
   normalizeWhatsAppPhone,
 } from '../src/utils/whatsappFormat.ts';
+import { getVerdictBadgeMeta } from '../src/utils/verdictPolicy.ts';
 import { getStore, saveStore } from './store.ts';
 import {
   formatTriggerTelegramHtml,
@@ -262,8 +263,9 @@ export function formatAiAlertsWhatsAppText(
 ): string {
   const header = `*SinalCripto IA — Novo Sinal Automático*`;
   const blocks = alerts.map((a) => {
+    const verdictLabel = getVerdictBadgeMeta(a.action, { headline: a.headline }).label;
     return [
-      `*${a.symbol} (${a.name})*: *${a.action}* (Confiança ${a.confidence}%)`,
+      `*${a.symbol} (${a.name})*: *${verdictLabel}* (Confiança ${a.confidence}%)`,
       `Preço: ${formatUsdForMsg(a.priceAtSignalUsd)} (${formatBrlForMsg(a.priceAtSignalUsd, usdBrlRate)})`,
       `Alvo: ${formatUsdForMsg(a.targetPriceUsd)} | Stop: ${formatUsdForMsg(a.stopLossUsd)}`,
       `${a.headline}`,
