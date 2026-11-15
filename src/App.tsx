@@ -3,7 +3,11 @@ import {
   BrainCircuit,
   CheckCircle2,
   Clock,
+  Cloud,
+  CloudCheck,
   Loader2,
+  LogIn,
+  LogOut,
   Plus,
   Search,
   Sparkles,
@@ -23,6 +27,14 @@ import { Sparkline } from './components/Sparkline.tsx';
 import { TriggersPanel } from './components/TriggersPanel.tsx';
 import { WhatsAppSettingsPanel } from './components/WhatsAppSettingsPanel.tsx';
 import {
+  auth,
+  formatFriendlyFirestoreError,
+  onAuthStateChanged,
+  signInWithGoogle,
+  signOutCloud,
+  type User,
+} from './firebase.ts';
+import {
   apiAddTransaction,
   apiAddWatchlist,
   apiClearAlerts,
@@ -35,18 +47,52 @@ import {
   apiDeleteStudyCycle,
   apiDeleteTransaction,
   apiDeleteTrigger,
+  apiDispatchWhatsApp,
+  apiFetchSnapshotsForAssets,
+  apiGetCoinPrice,
   apiGetState,
   apiMarkAlertsRead,
   apiRemoveWatchlist,
   apiRenamePortfolio,
+  apiRunCloudStudy,
   apiRunStudy,
+  apiSyncServer24h,
   apiUpdateSettings,
   apiUpdateTrigger,
+  computePortfolioSummaryFromData,
+  evaluateCloudAlertsAndTriggers,
+  getAccuracyStatsFromAlerts,
   getBackendMode,
 } from './services/apiClient.ts';
+import {
+  cloudAddTransaction,
+  cloudAddWatchlistAsset,
+  cloudClearAlerts,
+  cloudClearStudyHistory,
+  cloudClearTriggers,
+  cloudCreateTrigger,
+  cloudDeleteAlert,
+  cloudDeleteStudyCycle,
+  cloudDeleteTransaction,
+  cloudDeleteTransactionsBatch,
+  cloudDeleteTrigger,
+  cloudMarkAlertsRead,
+  cloudRemoveWatchlistAsset,
+  cloudRenamePortfolio,
+  cloudSaveAlertsAndTriggerUpdates,
+  cloudSaveStudyResults,
+  cloudUpdateSettings,
+  cloudUpdateTrigger,
+  ensureUserCloudProfile,
+  sanitizeSettings,
+  subscribeUserCloudWorkspace,
+  type CloudWorkspaceData,
+} from './services/firebaseSync.ts';
 import type {
   AppSettings,
   AppStatePayload,
+  MarketSnapshot,
+  PortfolioTransaction,
   PriceTrigger,
   SignalAction,
   SignalAlert,
@@ -54,6 +100,7 @@ import type {
   TriggerActionHint,
   TriggerConditionType,
   TriggerRepeatMode,
+  WatchlistAsset,
 } from './types/crypto.ts';
 import {
   formatCompactVolume,
@@ -67,9 +114,20 @@ import { playAlertChime, sendBrowserNotification } from './utils/notify.ts';
 type NavTab = 'painel' | 'carteira' | 'ativos' | 'autoestudo' | 'alertas';
 
 export default function App() {
-  const [state, setState] = useState<AppStatePayload | null>(null);
+  const [localState, setLocalState] = useState<AppStatePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Firebase Auth & Real-Time Multi-Device Cloud Sync
+  const [authReady, setAuthReady] = useState(false);
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [cloudData, setCloudData] = useState<CloudWorkspaceData | null>(null);
+  const [cloudSnapshots, setCloudSnapshots] = useState<Record<string, MarketSnapshot>>({});
+  const [cloudUsdBrlRate, setCloudUsdBrlRate] = useState<number>(5.75);
+  const [cloudIsStudying, setCloudIsStudying] = useState(false);
+  const [cloudNextStudyAt, setCloudNextStudyAt] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<NavTab>('painel');
   const [selectedCoinId, setSelectedCoinId] = useState<string>('');
   const [signalFilter, setSignalFilter] = useState<'TODOS' | SignalAction>('TODOS');
@@ -87,10 +145,64 @@ export default function App() {
   const [countdownLabel, setCountdownLabel] = useState<string>('');
   const [streamConnected, setStreamConnected] = useState(false);
 
+  const localStateRef = useRef<AppStatePayload | null>(null);
+  const cloudDataRef = useRef<CloudWorkspaceData | null>(null);
+  const cloudSnapshotsRef = useRef<Record<string, MarketSnapshot>>({});
+  const cloudUsdBrlRef = useRef<number>(5.75);
   const settingsRef = useRef<AppSettings | null>(null);
   const usdBrlRef = useRef<number>(5.75);
   const soundEnabledRef = useRef<boolean>(soundEnabled);
   const lastMarketTickAtRef = useRef<number>(0);
+  const triggerDispatchLockRef = useRef<Map<string, number>>(new Map());
+
+  const state: AppStatePayload | null = useMemo(() => {
+    if (cloudUser && cloudData) {
+      const portfolio = computePortfolioSummaryFromData(
+        cloudData.portfolioName,
+        cloudData.transactions,
+        cloudSnapshots
+      );
+      return {
+        watchlist: cloudData.watchlist,
+        snapshots: cloudSnapshots,
+        analyses: cloudData.analyses,
+        alerts: cloudData.alerts,
+        triggers: cloudData.triggers,
+        studyHistory: cloudData.studyHistory,
+        settings: cloudData.settings,
+        portfolio,
+        usdBrlRate: cloudUsdBrlRate,
+        isStudying: cloudIsStudying,
+        nextStudyAt: cloudNextStudyAt,
+        accuracyStats: getAccuracyStatsFromAlerts(cloudData.alerts),
+      };
+    }
+    return localState;
+  }, [
+    cloudUser,
+    cloudData,
+    cloudSnapshots,
+    cloudUsdBrlRate,
+    cloudIsStudying,
+    cloudNextStudyAt,
+    localState,
+  ]);
+
+  useEffect(() => {
+    localStateRef.current = localState;
+  }, [localState]);
+
+  useEffect(() => {
+    cloudDataRef.current = cloudData;
+  }, [cloudData]);
+
+  useEffect(() => {
+    cloudSnapshotsRef.current = cloudSnapshots;
+  }, [cloudSnapshots]);
+
+  useEffect(() => {
+    cloudUsdBrlRef.current = cloudUsdBrlRate;
+  }, [cloudUsdBrlRate]);
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -103,11 +215,107 @@ export default function App() {
     }
   }, [state]);
 
+  // Helper to collect union of watchlist, portfolio & trigger assets
+  const buildTrackedAssetList = useCallback((workspace: CloudWorkspaceData): WatchlistAsset[] => {
+    const map = new Map<string, WatchlistAsset>();
+    for (const w of workspace.watchlist) map.set(w.id, w);
+    for (const tx of workspace.transactions) {
+      if (!map.has(tx.coinId)) {
+        map.set(tx.coinId, {
+          id: tx.coinId,
+          symbol: tx.symbol.toUpperCase(),
+          name: tx.name,
+          binanceSymbol: `${tx.symbol.toUpperCase()}USDT`,
+          addedAt: tx.timestamp,
+        });
+      }
+    }
+    for (const trig of workspace.triggers) {
+      if (!map.has(trig.coinId)) {
+        map.set(trig.coinId, {
+          id: trig.coinId,
+          symbol: trig.symbol.toUpperCase(),
+          name: trig.name,
+          binanceSymbol: `${trig.symbol.toUpperCase()}USDT`,
+          addedAt: trig.createdAt,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, []);
+
+  // Listen to Firebase Auth state changes
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          await ensureUserCloudProfile(user.uid, localStateRef.current);
+          setCloudUser(user);
+        } catch (err) {
+          setError(formatFriendlyFirestoreError(err));
+          setCloudUser(user);
+        } finally {
+          setAuthReady(true);
+        }
+      } else {
+        setCloudUser(null);
+        setCloudData(null);
+        setAuthReady(true);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Attach Firestore real-time workspace listeners ONLY when authReady && cloudUser
+  useEffect(() => {
+    if (!authReady || !cloudUser) return;
+
+    const unsub = subscribeUserCloudWorkspace(
+      cloudUser.uid,
+      (workspace) => {
+        setCloudData(workspace);
+        setSelectedCoinId((prev) => {
+          if (workspace.watchlist.length === 0) return '';
+          return !workspace.watchlist.some((w) => w.id === prev)
+            ? workspace.watchlist[0].id
+            : prev;
+        });
+      },
+      (err) => {
+        setError(formatFriendlyFirestoreError(err));
+      }
+    );
+
+    return () => unsub();
+  }, [authReady, cloudUser]);
+
+  // Schedule next automatic study time when in Cloud Mode
+  useEffect(() => {
+    if (!cloudUser || !cloudData) {
+      setCloudNextStudyAt(null);
+      return;
+    }
+    if (!cloudData.settings.autoStudyEnabled) {
+      setCloudNextStudyAt(null);
+      return;
+    }
+    setCloudNextStudyAt((prev) => {
+      if (prev && new Date(prev).getTime() > Date.now()) return prev;
+      return new Date(
+        Date.now() + Math.max(1, cloudData.settings.intervalMinutes) * 60_000
+      ).toISOString();
+    });
+  }, [
+    cloudUser,
+    cloudData?.settings.autoStudyEnabled,
+    cloudData?.settings.intervalMinutes,
+  ]);
+
   const fetchInitialState = useCallback(async () => {
     try {
       const data = await apiGetState(true);
       lastMarketTickAtRef.current = Date.now();
-      setState(data);
+      setLocalState(data);
       setError(null);
       if (getBackendMode() === 'local') {
         setStreamConnected(true);
@@ -129,9 +337,9 @@ export default function App() {
     fetchInitialState();
   }, [fetchInitialState]);
 
-  // Real-time SSE connection when backend server is active
+  // Real-time SSE connection when backend server is active (when not overridden by Cloud Sync)
   useEffect(() => {
-    if (loading) return;
+    if (loading || cloudUser) return;
     if (getBackendMode() === 'local') {
       setStreamConnected(true);
       return;
@@ -155,7 +363,7 @@ export default function App() {
         };
         lastMarketTickAtRef.current = Date.now();
         setStreamConnected(true);
-        setState((prev) =>
+        setLocalState((prev) =>
           prev
             ? {
                 ...prev,
@@ -193,7 +401,7 @@ export default function App() {
             );
           }
         }
-        setState((prev) =>
+        setLocalState((prev) =>
           prev
             ? {
                 ...prev,
@@ -211,7 +419,7 @@ export default function App() {
         const data = JSON.parse((ev as MessageEvent).data) as {
           isStudying: boolean;
         };
-        setState((prev) =>
+        setLocalState((prev) =>
           prev ? { ...prev, isStudying: data.isStudying } : prev
         );
         if (!data.isStudying) {
@@ -238,7 +446,7 @@ export default function App() {
           state: AppStatePayload;
         };
         lastMarketTickAtRef.current = Date.now();
-        setState(data.state);
+        setLocalState(data.state);
         setStudyStatusMsg(null);
 
         if (data.newAlerts && data.newAlerts.length > 0) {
@@ -276,12 +484,109 @@ export default function App() {
     return () => {
       es.close();
     };
-  }, [loading]);
+  }, [loading, cloudUser]);
 
-  // Guaranteed 10-second live price refresh for watchlist + portfolio (server backup + static mode)
+  // Cloud-mode live 10-second market price & trigger evaluation loop across all devices
+  const cloudAssetSignature = useMemo(() => {
+    if (!cloudData) return '';
+    return buildTrackedAssetList(cloudData)
+      .map((a) => a.id)
+      .sort()
+      .join(',');
+  }, [cloudData, buildTrackedAssetList]);
+
+  const refreshCloudMarketTick = useCallback(async () => {
+    const uid = cloudUser?.uid;
+    const workspace = cloudDataRef.current;
+    if (!uid || !workspace) return;
+
+    const trackedAssets = buildTrackedAssetList(workspace);
+    try {
+      void apiSyncServer24h({
+        watchlist: workspace.watchlist,
+        priceTriggers: workspace.triggers,
+        settings: workspace.settings,
+      });
+
+      if (trackedAssets.length === 0) {
+        setStreamConnected(true);
+        return;
+      }
+
+      const { snapshots, usdBrlRate } = await apiFetchSnapshotsForAssets(trackedAssets, true);
+      lastMarketTickAtRef.current = Date.now();
+      setCloudSnapshots(snapshots);
+      setCloudUsdBrlRate(usdBrlRate);
+      setStreamConnected(true);
+
+      const evaluated = evaluateCloudAlertsAndTriggers({
+        alerts: workspace.alerts,
+        triggers: workspace.triggers,
+        settings: workspace.settings,
+        snapshots,
+        usdBrlRate,
+      });
+
+      const finalTriggers = [...evaluated.updatedTriggers];
+      const nowLock = Date.now();
+      for (const pending of evaluated.pendingWhatsApps) {
+        const prevLock = triggerDispatchLockRef.current.get(pending.triggerId) ?? 0;
+        if (nowLock - prevLock < 20_000) continue;
+        triggerDispatchLockRef.current.set(pending.triggerId, nowLock);
+
+        const delivery = await apiDispatchWhatsApp(
+          workspace.settings.whatsapp,
+          pending.text,
+          pending.metadata
+        );
+        const match = finalTriggers.find((t) => t.id === pending.triggerId);
+        if (match) {
+          match.lastDeliveryStatus = delivery.ok ? 'enviado' : 'falha';
+          match.lastDeliveryError = delivery.ok ? undefined : delivery.error;
+        }
+      }
+
+      if (
+        finalTriggers.length > 0 ||
+        evaluated.newAlerts.length > 0 ||
+        evaluated.evaluatedAlerts.length > 0
+      ) {
+        await cloudSaveAlertsAndTriggerUpdates(
+          uid,
+          finalTriggers,
+          evaluated.newAlerts,
+          evaluated.evaluatedAlerts
+        );
+        if (evaluated.newAlerts.length > 0) {
+          setLiveBannerAlerts((prev) => [...evaluated.newAlerts, ...prev].slice(0, 3));
+          const first = evaluated.newAlerts[0];
+          if (soundEnabledRef.current && first) {
+            playAlertChime(first.action);
+          }
+          if (first) {
+            sendBrowserNotification(first, workspace.settings.currency, usdBrlRate);
+          }
+        }
+      }
+    } catch {
+      // silent retry on next 10s cycle
+    }
+  }, [cloudUser?.uid, buildTrackedAssetList]);
+
+  useEffect(() => {
+    if (!cloudUser || !cloudData) return;
+    void refreshCloudMarketTick();
+  }, [cloudUser?.uid, cloudAssetSignature, Boolean(cloudData), refreshCloudMarketTick]);
+
+  // Guaranteed 10-second live price refresh for watchlist + portfolio (cloud + server backup + static mode)
   useEffect(() => {
     if (loading) return;
     const timer = setInterval(async () => {
+      if (cloudUser && cloudDataRef.current) {
+        await refreshCloudMarketTick();
+        return;
+      }
+
       const elapsed = Date.now() - lastMarketTickAtRef.current;
       // If SSE just delivered a fresh tick (< 9s), skip redundant poll
       if (getBackendMode() === 'server' && elapsed < 9_000) {
@@ -291,7 +596,7 @@ export default function App() {
         const fresh = await apiGetState(true);
         lastMarketTickAtRef.current = Date.now();
         setStreamConnected(true);
-        setState((prev) =>
+        setLocalState((prev) =>
           prev
             ? {
                 ...prev,
@@ -312,7 +617,7 @@ export default function App() {
     }, 10_000);
 
     return () => clearInterval(timer);
-  }, [loading]);
+  }, [loading, cloudUser, refreshCloudMarketTick]);
 
   // Countdown timer for next automatic AI study
   useEffect(() => {
@@ -335,72 +640,242 @@ export default function App() {
       if (
         diffSec === 0 &&
         !triggeredLocalCycle &&
-        getBackendMode() === 'local' &&
+        (Boolean(cloudUser) || getBackendMode() === 'local') &&
         state.watchlist.length > 0 &&
         !state.isStudying
       ) {
         triggeredLocalCycle = true;
-        void apiRunStudy()
-          .then((res) => {
-            setState(res.state);
-            if (res.newAlerts && res.newAlerts.length > 0) {
-              setLiveBannerAlerts(res.newAlerts.slice(0, 3));
-            }
-          })
-          .catch(() => {
-            // retry on next schedule
-          });
+        void handleRunStudy(undefined, 'automatico').catch(() => {
+          // retry on next schedule
+        });
       }
     };
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [state?.nextStudyAt, state?.settings.autoStudyEnabled, state?.watchlist.length, state?.isStudying]);
+  }, [
+    state?.nextStudyAt,
+    state?.settings.autoStudyEnabled,
+    state?.watchlist.length,
+    state?.isStudying,
+    cloudUser,
+  ]);
 
-  async function handleRunStudy(coinId?: string) {
+  async function handleGoogleSignIn() {
+    setAuthBusy(true);
     setError(null);
-    setState((prev) => (prev ? { ...prev, isStudying: true } : prev));
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setError(formatFriendlyFirestoreError(err));
+      }
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleGoogleSignOut() {
+    setAuthBusy(true);
+    try {
+      await signOutCloud();
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao sair da conta Google.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleRunStudy(
+    coinId?: string,
+    trigger: 'automatico' | 'manual' | 'novo_ativo' = 'manual'
+  ) {
+    setError(null);
+    if (cloudUser && cloudDataRef.current) {
+      const workspace = cloudDataRef.current;
+      const targets = coinId
+        ? workspace.watchlist.filter((w) => w.id === coinId)
+        : workspace.watchlist;
+      if (targets.length === 0) {
+        setError('Nenhum ativo cadastrado para estudar.');
+        return;
+      }
+      setCloudIsStudying(true);
+      setStudyStatusMsg(`Estudando ${targets.length} ativo(s) e sincronizando na nuvem...`);
+      try {
+        const portfolioSummary = computePortfolioSummaryFromData(
+          workspace.portfolioName,
+          workspace.transactions,
+          cloudSnapshotsRef.current
+        );
+        const result = await apiRunCloudStudy({
+          assetsToStudy: targets,
+          allTrackedAssets: buildTrackedAssetList(workspace),
+          previousAnalyses: workspace.analyses,
+          recentAlerts: workspace.alerts,
+          portfolioSummary,
+          settings: workspace.settings,
+          accuracyStats: getAccuracyStatsFromAlerts(workspace.alerts),
+          trigger,
+        });
+
+        setCloudSnapshots(result.snapshots);
+        await cloudSaveStudyResults(
+          cloudUser.uid,
+          result.returnedAnalysesList,
+          result.newAlerts,
+          result.cycle
+        );
+
+        if (workspace.settings.autoStudyEnabled) {
+          setCloudNextStudyAt(
+            new Date(
+              Date.now() + Math.max(1, workspace.settings.intervalMinutes) * 60_000
+            ).toISOString()
+          );
+        }
+
+        if (result.newAlerts && result.newAlerts.length > 0) {
+          setLiveBannerAlerts(result.newAlerts.slice(0, 3));
+          const actionable = result.newAlerts.find(
+            (a) => a.action === 'COMPRAR' || a.action === 'VENDER'
+          );
+          const first = actionable ?? result.newAlerts[0];
+          if (soundEnabledRef.current && first) {
+            playAlertChime(first.action);
+          }
+          if (first) {
+            sendBrowserNotification(first, workspace.settings.currency, cloudUsdBrlRef.current);
+          }
+        }
+      } catch (err: any) {
+        setError(formatFriendlyFirestoreError(err));
+      } finally {
+        setCloudIsStudying(false);
+        setStudyStatusMsg(null);
+      }
+      return;
+    }
+
+    setLocalState((prev) => (prev ? { ...prev, isStudying: true } : prev));
     try {
       const json = await apiRunStudy(coinId);
-      setState(json.state);
+      setLocalState(json.state);
       if (json.newAlerts && json.newAlerts.length > 0) {
         setLiveBannerAlerts(json.newAlerts.slice(0, 3));
       }
     } catch (err: any) {
       setError(err?.message || 'Erro ao executar estudo de IA.');
-      setState((prev) => (prev ? { ...prev, isStudying: false } : prev));
+      setLocalState((prev) => (prev ? { ...prev, isStudying: false } : prev));
     }
   }
 
   async function handleAddAsset(coin: { id: string; symbol: string; name: string }) {
+    if (cloudUser && cloudDataRef.current) {
+      const workspace = cloudDataRef.current;
+      if (workspace.watchlist.some((w) => w.id === coin.id)) {
+        throw new Error(`${coin.symbol.toUpperCase()} já está na lista de monitoramento.`);
+      }
+      const newAsset: WatchlistAsset = {
+        id: coin.id,
+        symbol: coin.symbol.toUpperCase(),
+        name: coin.name,
+        binanceSymbol: `${coin.symbol.toUpperCase()}USDT`,
+        addedAt: new Date().toISOString(),
+      };
+      await cloudAddWatchlistAsset(cloudUser.uid, newAsset);
+      setSelectedCoinId(coin.id);
+
+      void apiFetchSnapshotsForAssets([newAsset, ...buildTrackedAssetList(workspace)], true)
+        .then(async ({ snapshots, usdBrlRate }) => {
+          setCloudSnapshots((prev) => ({ ...prev, ...snapshots }));
+          setCloudUsdBrlRate(usdBrlRate);
+          try {
+            const summary = computePortfolioSummaryFromData(
+              workspace.portfolioName,
+              workspace.transactions,
+              { ...cloudSnapshotsRef.current, ...snapshots }
+            );
+            const res = await apiRunCloudStudy({
+              assetsToStudy: [newAsset],
+              allTrackedAssets: [newAsset, ...buildTrackedAssetList(workspace)],
+              previousAnalyses: workspace.analyses,
+              recentAlerts: workspace.alerts,
+              portfolioSummary: summary,
+              settings: workspace.settings,
+              accuracyStats: getAccuracyStatsFromAlerts(workspace.alerts),
+              trigger: 'novo_ativo',
+            });
+            await cloudSaveStudyResults(
+              cloudUser.uid,
+              res.returnedAnalysesList,
+              res.newAlerts,
+              res.cycle
+            );
+          } catch {
+            // user can re-run manually anytime
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
     const updatedState = await apiAddWatchlist(coin);
-    setState(updatedState);
+    setLocalState(updatedState);
     setSelectedCoinId(coin.id);
   }
 
   async function handleRemoveAsset(coinId: string) {
     try {
+      if (cloudUser) {
+        await cloudRemoveWatchlistAsset(cloudUser.uid, coinId);
+        return;
+      }
       const updatedState = await apiRemoveWatchlist(coinId);
-      setState(updatedState);
+      setLocalState(updatedState);
       if (updatedState.watchlist.length === 0) {
         setSelectedCoinId('');
       } else if (selectedCoinId === coinId) {
         setSelectedCoinId(updatedState.watchlist[0].id);
       }
     } catch (err: any) {
-      setError(err?.message || 'Não foi possível remover o ativo.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Não foi possível remover o ativo.'
+      );
     }
   }
 
   async function handleUpdateSettings(patch: Partial<AppSettings>) {
+    if (cloudUser && cloudDataRef.current) {
+      const current = cloudDataRef.current.settings;
+      const merged = sanitizeSettings({
+        ...current,
+        ...patch,
+        whatsapp: patch.whatsapp
+          ? { ...current.whatsapp, ...patch.whatsapp }
+          : current.whatsapp,
+      });
+      await cloudUpdateSettings(cloudUser.uid, merged);
+      return;
+    }
+
     const updatedState = await apiUpdateSettings(patch);
-    setState(updatedState);
+    setLocalState(updatedState);
   }
 
   async function handleMarkAlertsRead() {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const unreadIds = cloudDataRef.current.alerts
+          .filter((a) => !a.read)
+          .map((a) => a.id);
+        await cloudMarkAlertsRead(cloudUser.uid, unreadIds);
+        return;
+      }
       await apiMarkAlertsRead();
-      setState((prev) =>
+      setLocalState((prev) =>
         prev
           ? {
               ...prev,
@@ -424,81 +899,220 @@ export default function App() {
     timestamp: string;
     note?: string;
   }) {
+    if (cloudUser && cloudDataRef.current) {
+      const workspace = cloudDataRef.current;
+      const upperSym = payload.symbol.toUpperCase();
+      const missingFromWatchlist = !workspace.watchlist.some((w) => w.id === payload.coinId);
+      const autoAsset: WatchlistAsset | null = missingFromWatchlist
+        ? {
+            id: payload.coinId,
+            symbol: upperSym,
+            name: payload.name,
+            binanceSymbol: `${upperSym}USDT`,
+            addedAt: new Date().toISOString(),
+          }
+        : null;
+      const tx: PortfolioTransaction = {
+        id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        coinId: payload.coinId,
+        symbol: upperSym,
+        name: payload.name,
+        type: payload.type,
+        quantity: payload.quantity,
+        pricePerCoinUsd: payload.pricePerCoinUsd,
+        feeUsd: payload.feeUsd,
+        timestamp: payload.timestamp,
+        note: payload.note,
+      };
+      await cloudAddTransaction(cloudUser.uid, tx, autoAsset);
+
+      const assetsToFetch = autoAsset
+        ? [autoAsset, ...buildTrackedAssetList(workspace)]
+        : buildTrackedAssetList(workspace);
+      void apiFetchSnapshotsForAssets(assetsToFetch, true)
+        .then(async ({ snapshots, usdBrlRate }) => {
+          setCloudSnapshots((prev) => ({ ...prev, ...snapshots }));
+          setCloudUsdBrlRate(usdBrlRate);
+          if (autoAsset) {
+            try {
+              const updatedTxs = [tx, ...workspace.transactions];
+              const summary = computePortfolioSummaryFromData(
+                workspace.portfolioName,
+                updatedTxs,
+                { ...cloudSnapshotsRef.current, ...snapshots }
+              );
+              const res = await apiRunCloudStudy({
+                assetsToStudy: [autoAsset],
+                allTrackedAssets: assetsToFetch,
+                previousAnalyses: workspace.analyses,
+                recentAlerts: workspace.alerts,
+                portfolioSummary: summary,
+                settings: workspace.settings,
+                accuracyStats: getAccuracyStatsFromAlerts(workspace.alerts),
+                trigger: 'novo_ativo',
+              });
+              await cloudSaveStudyResults(
+                cloudUser.uid,
+                res.returnedAnalysesList,
+                res.newAlerts,
+                res.cycle
+              );
+            } catch {
+              // background study optional
+            }
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
     const updatedState = await apiAddTransaction(payload);
-    setState(updatedState);
+    setLocalState(updatedState);
   }
 
   async function handleDeleteTransaction(txId: string) {
     try {
+      if (cloudUser) {
+        await cloudDeleteTransaction(cloudUser.uid, txId);
+        return;
+      }
       const updatedState = await apiDeleteTransaction(txId);
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao excluir transação.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao excluir transação.'
+      );
     }
   }
 
   async function handleDeletePortfolioCoin(coinId: string) {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const ids = cloudDataRef.current.transactions
+          .filter((t) => t.coinId === coinId)
+          .map((t) => t.id);
+        await cloudDeleteTransactionsBatch(cloudUser.uid, ids);
+        return;
+      }
       const updatedState = await apiDeletePortfolioAsset(coinId);
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao excluir ativo e histórico da carteira.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao excluir ativo e histórico da carteira.'
+      );
     }
   }
 
   async function handleClearPortfolioTransactions() {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const ids = cloudDataRef.current.transactions.map((t) => t.id);
+        await cloudDeleteTransactionsBatch(cloudUser.uid, ids);
+        return;
+      }
       const updatedState = await apiClearTransactions();
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao limpar histórico de transações.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao limpar histórico de transações.'
+      );
     }
   }
 
   async function handleDeleteAlert(alertId: string) {
     try {
+      if (cloudUser) {
+        await cloudDeleteAlert(cloudUser.uid, alertId);
+        setLiveBannerAlerts((prev) => prev.filter((a) => a.id !== alertId));
+        return;
+      }
       const updatedState = await apiDeleteAlert(alertId);
-      setState(updatedState);
+      setLocalState(updatedState);
       setLiveBannerAlerts((prev) => prev.filter((a) => a.id !== alertId));
     } catch (err: any) {
-      setError(err?.message || 'Falha ao excluir alerta.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao excluir alerta.'
+      );
     }
   }
 
   async function handleClearAlerts() {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const ids = cloudDataRef.current.alerts.map((a) => a.id);
+        await cloudClearAlerts(cloudUser.uid, ids);
+        setLiveBannerAlerts([]);
+        return;
+      }
       const updatedState = await apiClearAlerts();
-      setState(updatedState);
+      setLocalState(updatedState);
       setLiveBannerAlerts([]);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao limpar histórico de alertas.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao limpar histórico de alertas.'
+      );
     }
   }
 
   async function handleDeleteStudyCycle(cycleId: string) {
     try {
+      if (cloudUser) {
+        await cloudDeleteStudyCycle(cloudUser.uid, cycleId);
+        return;
+      }
       const updatedState = await apiDeleteStudyCycle(cycleId);
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao excluir registro de estudo.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao excluir registro de estudo.'
+      );
     }
   }
 
   async function handleClearStudyHistory() {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const ids = cloudDataRef.current.studyHistory.map((c) => c.id);
+        await cloudClearStudyHistory(cloudUser.uid, ids);
+        return;
+      }
       const updatedState = await apiClearStudyHistory();
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao limpar histórico de estudos.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Falha ao limpar histórico de estudos.'
+      );
     }
   }
 
   async function handleRenamePortfolio(name: string) {
     try {
+      if (cloudUser) {
+        await cloudRenamePortfolio(cloudUser.uid, name);
+        return;
+      }
       const updatedState = await apiRenamePortfolio(name);
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao renomear carteira.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Erro ao renomear carteira.'
+      );
     }
   }
 
@@ -525,43 +1139,110 @@ export default function App() {
     sendWhatsApp?: boolean;
     note?: string;
   }) {
+    if (cloudUser) {
+      let refUsd = Number(payload.referencePriceUsd) || 0;
+      if (refUsd <= 0) {
+        const fetched = await apiGetCoinPrice(payload.coinId, payload.symbol);
+        if (fetched && fetched > 0) refUsd = fetched;
+      }
+      const newTrig: PriceTrigger = {
+        id: `trig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        coinId: payload.coinId,
+        symbol: payload.symbol.toUpperCase(),
+        name: payload.name,
+        conditionType: payload.conditionType,
+        targetValue: payload.targetValue,
+        referencePriceUsd: refUsd,
+        actionHint: payload.actionHint,
+        repeatMode: payload.repeatMode,
+        cooldownMinutes: payload.cooldownMinutes ?? 60,
+        enabled: true,
+        sendWhatsApp: payload.sendWhatsApp ?? true,
+        note: payload.note?.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        triggerCount: 0,
+      };
+      await cloudCreateTrigger(cloudUser.uid, newTrig);
+      return;
+    }
+
     const updatedState = await apiCreateTrigger(payload);
-    setState(updatedState);
+    setLocalState(updatedState);
   }
 
   async function handleToggleTrigger(triggerId: string, enabled: boolean) {
     try {
+      if (cloudUser) {
+        await cloudUpdateTrigger(cloudUser.uid, triggerId, { enabled });
+        return;
+      }
       const updatedState = await apiUpdateTrigger(triggerId, { enabled });
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao atualizar gatilho.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Erro ao atualizar gatilho.'
+      );
     }
   }
 
   async function handleResetTriggerRef(triggerId: string) {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const trig = cloudDataRef.current.triggers.find((t) => t.id === triggerId);
+        if (!trig) return;
+        const live = await apiGetCoinPrice(trig.coinId, trig.symbol);
+        if (live && live > 0) {
+          await cloudUpdateTrigger(cloudUser.uid, triggerId, {
+            referencePriceUsd: live,
+          });
+        }
+        return;
+      }
       const updatedState = await apiUpdateTrigger(triggerId, { resetReference: true });
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao atualizar preço base do gatilho.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Erro ao atualizar preço base do gatilho.'
+      );
     }
   }
 
   async function handleDeleteTrigger(triggerId: string) {
     try {
+      if (cloudUser) {
+        await cloudDeleteTrigger(cloudUser.uid, triggerId);
+        return;
+      }
       const updatedState = await apiDeleteTrigger(triggerId);
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao excluir gatilho.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Erro ao excluir gatilho.'
+      );
     }
   }
 
   async function handleClearTriggers() {
     try {
+      if (cloudUser && cloudDataRef.current) {
+        const ids = cloudDataRef.current.triggers.map((t) => t.id);
+        await cloudClearTriggers(cloudUser.uid, ids);
+        return;
+      }
       const updatedState = await apiClearTriggers();
-      setState(updatedState);
+      setLocalState(updatedState);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao limpar gatilhos.');
+      setError(
+        cloudUser
+          ? formatFriendlyFirestoreError(err)
+          : err?.message || 'Erro ao limpar gatilhos.'
+      );
     }
   }
 
@@ -844,8 +1525,80 @@ export default function App() {
           )}
         </div>
 
+        {/* Cross-Device Cloud Sync Strip (PC <-> Tablet <-> Celular) */}
+        {authReady && (
+          <section
+            className={`rounded-xl border px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${
+              cloudUser
+                ? 'border-emerald-500/20 bg-[#111827]'
+                : 'border-sky-500/25 bg-[#111827]'
+            }`}
+          >
+            {cloudUser ? (
+              <>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                    <CloudCheck className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-100">
+                      <span>Sincronização em nuvem ativa</span>
+                      {cloudUser.email && (
+                        <span className="font-mono text-[11px] font-normal text-emerald-300 truncate">
+                          {cloudUser.email}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Carteira, ativos, gatilhos 24h e configurações são salvos em tempo real no seu computador, tablet e celular.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={authBusy}
+                  onClick={() => void handleGoogleSignOut()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-300 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sair da conta
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
+                    <Cloud className="w-4 h-4 text-sky-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-100">
+                      Sincronize seus dados entre computador, tablet e celular
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Entre com sua conta Google nos seus dispositivos para manter carteira, ativos e gatilhos do WhatsApp sempre iguais em todos eles.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={authBusy}
+                  onClick={() => void handleGoogleSignIn()}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+                >
+                  {authBusy ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <LogIn className="w-3.5 h-3.5" />
+                  )}
+                  Entrar com Google
+                </button>
+              </>
+            )}
+          </section>
+        )}
+
         {/* Loading skeleton */}
-        {loading && !state ? (
+        {(loading || (cloudUser && !cloudData)) && !state ? (
           <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[0, 1, 2, 3].map((idx) => (

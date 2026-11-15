@@ -734,6 +734,198 @@ function evaluateLocalAlerts(store: LocalStore, snapshots: Record<string, Market
   if (updated) saveLocalStore(store);
 }
 
+export function computePortfolioSummaryFromData(
+  portfolioName: string,
+  transactions: PortfolioTransaction[],
+  snapshots: Record<string, MarketSnapshot>
+): PortfolioSummary {
+  const storeLike = {
+    portfolioName,
+    transactions,
+  } as LocalStore;
+  return computeLocalPortfolioSummary(storeLike, snapshots);
+}
+
+export function getAccuracyStatsFromAlerts(alerts: SignalAlert[]) {
+  const storeLike = { alerts } as LocalStore;
+  return getLocalAccuracyStats(storeLike);
+}
+
+export function evaluateCloudAlertsAndTriggers(
+  params: {
+    alerts: SignalAlert[];
+    triggers: PriceTrigger[];
+    settings: AppSettings;
+    snapshots: Record<string, MarketSnapshot>;
+    usdBrlRate: number;
+  }
+): {
+  updatedTriggers: PriceTrigger[];
+  newAlerts: SignalAlert[];
+  evaluatedAlerts: Array<{
+    id: string;
+    outcome: SignalAlert['outcome'];
+    evaluatedReturnPct: number;
+    evaluatedAt: string;
+  }>;
+  pendingWhatsApps: Array<{ triggerId: string; text: string; metadata: unknown }>;
+} {
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const evaluatedAlerts: Array<{
+    id: string;
+    outcome: SignalAlert['outcome'];
+    evaluatedReturnPct: number;
+    evaluatedAt: string;
+  }> = [];
+
+  for (const alert of params.alerts) {
+    const snap = params.snapshots[alert.coinId];
+    if (!snap || snap.priceUsd <= 0 || alert.priceAtSignalUsd <= 0) continue;
+    const rawReturnPct = Number(
+      (((snap.priceUsd - alert.priceAtSignalUsd) / alert.priceAtSignalUsd) * 100).toFixed(2)
+    );
+    let nextOutcome: SignalAlert['outcome'] = alert.outcome;
+    if (alert.action === 'COMPRAR') {
+      if (rawReturnPct >= 1.2 || snap.priceUsd >= alert.targetPriceUsd) nextOutcome = 'acerto';
+      else if (rawReturnPct <= -2.0 || snap.priceUsd <= alert.stopLossUsd) nextOutcome = 'erro';
+      else nextOutcome = (nowMs - new Date(alert.createdAt).getTime()) / 3600_000 > 12 ? 'neutro' : 'em_aberto';
+    } else if (alert.action === 'VENDER') {
+      if (rawReturnPct <= -1.2 || snap.priceUsd <= alert.targetPriceUsd) nextOutcome = 'acerto';
+      else if (rawReturnPct >= 2.0 || snap.priceUsd >= alert.stopLossUsd) nextOutcome = 'erro';
+      else nextOutcome = (nowMs - new Date(alert.createdAt).getTime()) / 3600_000 > 12 ? 'neutro' : 'em_aberto';
+    } else {
+      const ageHours = (nowMs - new Date(alert.createdAt).getTime()) / 3600_000;
+      nextOutcome =
+        ageHours >= 2 ? (Math.abs(rawReturnPct) <= 2.2 ? 'acerto' : 'neutro') : 'em_aberto';
+    }
+
+    if (
+      nextOutcome !== alert.outcome ||
+      alert.evaluatedReturnPct === undefined ||
+      Math.abs((alert.evaluatedReturnPct ?? 0) - rawReturnPct) >= 0.5
+    ) {
+      evaluatedAlerts.push({
+        id: alert.id,
+        outcome: nextOutcome,
+        evaluatedReturnPct: rawReturnPct,
+        evaluatedAt: nowIso,
+      });
+    }
+  }
+
+  const updatedTriggers: PriceTrigger[] = [];
+  const newAlerts: SignalAlert[] = [];
+  const pendingWhatsApps: Array<{ triggerId: string; text: string; metadata: unknown }> = [];
+
+  for (const original of params.triggers) {
+    const snap = params.snapshots[original.coinId];
+    if (!snap || snap.priceUsd <= 0) continue;
+    const price = snap.priceUsd;
+    const trig = { ...original };
+    let changed = false;
+
+    if (
+      (trig.conditionType === 'queda_pct' || trig.conditionType === 'alta_pct') &&
+      trig.referencePriceUsd <= 0
+    ) {
+      trig.referencePriceUsd = price;
+      changed = true;
+    }
+
+    if (trig.enabled) {
+      let cooldownOk = true;
+      if (trig.repeatMode === 'continuo' && trig.lastTriggeredAt) {
+        const elapsedMin = (nowMs - new Date(trig.lastTriggeredAt).getTime()) / 60_000;
+        if (elapsedMin < Math.max(1, trig.cooldownMinutes || 60)) {
+          cooldownOk = false;
+        }
+      }
+
+      if (cooldownOk) {
+        let fired = false;
+        let movePct: number | undefined;
+        if (trig.conditionType === 'queda_pct' && trig.referencePriceUsd > 0) {
+          const drop = ((trig.referencePriceUsd - price) / trig.referencePriceUsd) * 100;
+          movePct = -drop;
+          if (drop >= trig.targetValue) fired = true;
+        } else if (trig.conditionType === 'alta_pct' && trig.referencePriceUsd > 0) {
+          const rise = ((price - trig.referencePriceUsd) / trig.referencePriceUsd) * 100;
+          movePct = rise;
+          if (rise >= trig.targetValue) fired = true;
+        } else if (trig.conditionType === 'abaixo_preco' && price <= trig.targetValue) {
+          fired = true;
+        } else if (trig.conditionType === 'acima_preco' && price >= trig.targetValue) {
+          fired = true;
+        }
+
+        if (fired) {
+          const prevRef = trig.referencePriceUsd;
+          trig.lastTriggeredAt = nowIso;
+          trig.lastTriggeredPriceUsd = price;
+          trig.triggerCount = (trig.triggerCount || 0) + 1;
+          if (trig.repeatMode === 'uma_vez') trig.enabled = false;
+          else if (trig.conditionType === 'queda_pct' || trig.conditionType === 'alta_pct') {
+            trig.referencePriceUsd = price;
+          }
+          if (trig.sendWhatsApp && !params.settings.whatsapp.enabled) {
+            trig.lastDeliveryStatus = 'sem_whatsapp';
+          }
+          changed = true;
+
+          const mappedAction: SignalAction =
+            trig.actionHint === 'COMPRAR'
+              ? 'COMPRAR'
+              : trig.actionHint === 'VENDER'
+              ? 'VENDER'
+              : 'ESPERAR';
+
+          newAlerts.push({
+            id: `trig_al_${nowMs}_${Math.random().toString(36).slice(2, 6)}`,
+            coinId: trig.coinId,
+            symbol: trig.symbol,
+            name: trig.name,
+            action: mappedAction,
+            confidence: 100,
+            priceAtSignalUsd: price,
+            targetPriceUsd: mappedAction === 'VENDER' ? price * 0.94 : price * 1.06,
+            stopLossUsd: mappedAction === 'VENDER' ? price * 1.04 : price * 0.95,
+            headline: `Gatilho atingido: ${trig.symbol} — ${trig.actionHint}`,
+            reason:
+              trig.note ||
+              `Preço atingiu US$ ${price.toFixed(4)} (${
+                movePct !== undefined
+                  ? `${movePct.toFixed(2)}%`
+                  : `ref. US$ ${prevRef.toFixed(4)}`
+              }).`,
+            createdAt: nowIso,
+            read: false,
+            outcome: 'em_aberto',
+          });
+
+          if (trig.sendWhatsApp && params.settings.whatsapp.enabled) {
+            const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}`;
+            pendingWhatsApps.push({
+              triggerId: trig.id,
+              text: msg,
+              metadata: { trig },
+            });
+          }
+        }
+      }
+    }
+
+    if (changed) updatedTriggers.push(trig);
+  }
+
+  return {
+    updatedTriggers,
+    newAlerts,
+    evaluatedAlerts,
+    pendingWhatsApps,
+  };
+}
+
 function getLocalAccuracyStats(store: LocalStore) {
   const evaluated = store.alerts.filter((a) => a.outcome !== 'em_aberto');
   const hits = evaluated.filter((a) => a.outcome === 'acerto').length;
@@ -1189,6 +1381,163 @@ export async function apiGetState(forceRefresh = false): Promise<AppStatePayload
   );
 }
 
+export async function apiFetchSnapshotsForAssets(
+  assets: WatchlistAsset[],
+  forceRefresh = false
+): Promise<{ snapshots: Record<string, MarketSnapshot>; usdBrlRate: number }> {
+  return withFallback(
+    () =>
+      safeFetchJson<{ snapshots: Record<string, MarketSnapshot>; usdBrlRate: number }>(
+        '/api/market/snapshots',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assets, forceRefresh }),
+        }
+      ),
+    async () => {
+      const [snapshots, usdBrlRate] = await Promise.all([
+        fetchLocalMarketSnapshots(assets, forceRefresh),
+        fetchLocalUsdBrl(),
+      ]);
+      return { snapshots, usdBrlRate };
+    }
+  );
+}
+
+export async function apiSyncServer24h(payload: {
+  watchlist: WatchlistAsset[];
+  priceTriggers: PriceTrigger[];
+  settings: AppSettings;
+}): Promise<void> {
+  if (currentMode === 'local') return;
+  try {
+    await safeFetchJson<{ ok: boolean }>('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, clientActiveMs: 30_000 }),
+    });
+  } catch {
+    // non-fatal best-effort sync for background 24h daemon
+  }
+}
+
+export async function apiDispatchWhatsApp(
+  whatsapp: WhatsAppSettings,
+  text: string,
+  metadata?: unknown
+): Promise<{ ok: boolean; error?: string }> {
+  return withFallback<{ ok: boolean; error?: string }>(
+    async () => {
+      try {
+        await safeFetchJson<{ ok: boolean }>('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp, text, metadata }),
+        });
+        return { ok: true };
+      } catch (err: any) {
+        if (err instanceof BackendUnavailableError) throw err;
+        return { ok: false, error: err?.message || 'Falha ao enviar WhatsApp.' };
+      }
+    },
+    () => sendLocalWhatsAppMessage(whatsapp, text, metadata)
+  );
+}
+
+export async function apiRunCloudStudy(params: {
+  assetsToStudy: WatchlistAsset[];
+  allTrackedAssets: WatchlistAsset[];
+  previousAnalyses: Record<string, AIAnalysisResult>;
+  recentAlerts: SignalAlert[];
+  portfolioSummary: PortfolioSummary;
+  settings: AppSettings;
+  accuracyStats: {
+    totalEvaluated: number;
+    hits: number;
+    neutrals: number;
+    misses: number;
+    accuracyPct: number | null;
+  };
+  trigger?: 'automatico' | 'manual' | 'novo_ativo';
+}): Promise<{
+  cycle: StudyCycleSummary;
+  newAlerts: SignalAlert[];
+  returnedAnalysesList: AIAnalysisResult[];
+  snapshots: Record<string, MarketSnapshot>;
+}> {
+  return withFallback(
+    () =>
+      safeFetchJson('/api/study/cloud-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      }),
+    async () => {
+      const snapshots = await fetchLocalMarketSnapshots(params.allTrackedAssets, true);
+      const cycleId = `cyc_${Date.now()}`;
+      const newAlerts: SignalAlert[] = [];
+      const returnedAnalysesList: AIAnalysisResult[] = [];
+      let buySignals = 0;
+      let sellSignals = 0;
+      let holdSignals = 0;
+
+      for (const asset of params.assetsToStudy) {
+        const snap = snapshots[asset.id];
+        if (!snap) continue;
+        const holding = params.portfolioSummary.holdings.find((h) => h.coinId === asset.id);
+        const analysis = analyzeAssetLocally(asset, snap, cycleId, holding);
+        returnedAnalysesList.push(analysis);
+
+        if (analysis.action === 'COMPRAR') buySignals++;
+        else if (analysis.action === 'VENDER') sellSignals++;
+        else holdSignals++;
+
+        const prev = params.previousAnalyses[asset.id];
+        const actionChanged = !prev || prev.action !== analysis.action;
+        if (
+          analysis.action !== 'ESPERAR' &&
+          analysis.confidence >= params.settings.minConfidenceForAlert &&
+          (actionChanged || params.trigger === 'manual' || params.trigger === 'novo_ativo')
+        ) {
+          newAlerts.push({
+            id: `al_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            coinId: asset.id,
+            symbol: asset.symbol,
+            name: asset.name,
+            action: analysis.action,
+            previousAction: prev?.action,
+            confidence: analysis.confidence,
+            priceAtSignalUsd: snap.priceUsd,
+            targetPriceUsd: analysis.targetPriceUsd,
+            stopLossUsd: analysis.stopLossUsd,
+            headline: analysis.headline,
+            reason: analysis.thesis,
+            createdAt: new Date().toISOString(),
+            read: false,
+            outcome: 'em_aberto',
+          });
+        }
+      }
+
+      const cycle: StudyCycleSummary = {
+        id: cycleId,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        trigger: params.trigger ?? 'manual',
+        assetsStudied: returnedAnalysesList.length,
+        buySignals,
+        sellSignals,
+        holdSignals,
+        alertsEmitted: newAlerts.length,
+        marketSummary: `Ciclo concluído para ${returnedAnalysesList.length} ativo(s): ${buySignals} compra, ${sellSignals} venda e ${holdSignals} espera.`,
+        evaluatedAccuracyPct: params.accuracyStats.accuracyPct,
+      };
+      return { cycle, newAlerts, returnedAnalysesList, snapshots };
+    }
+  );
+}
+
 export async function apiGetAssetChart(
   coinId: string,
   range: '24h' | '7d' | '30d',
@@ -1197,7 +1546,9 @@ export async function apiGetAssetChart(
   return withFallback(
     () =>
       safeFetchJson<{ points: ChartPoint[] }>(
-        `/api/chart/${encodeURIComponent(coinId)}?range=${range}`
+        `/api/chart/${encodeURIComponent(coinId)}?range=${range}${
+          symbol ? `&symbol=${encodeURIComponent(symbol)}` : ''
+        }`
       ),
     async () => {
       const store = loadLocalStore();
@@ -1231,19 +1582,38 @@ export async function apiGetAssetChart(
 }
 
 export async function apiGetPortfolioHistory(
-  range: '24h' | '7d' | '30d' | '90d' | 'all'
+  range: '24h' | '7d' | '30d' | '90d' | 'all',
+  cloudOverride?: { holdings: PortfolioHolding[]; totalCostBasisUsd: number }
 ): Promise<{ points: PortfolioHistoryPoint[] }> {
   return withFallback(
     () =>
-      safeFetchJson<{ points: PortfolioHistoryPoint[] }>(
-        `/api/portfolio/history?range=${range}`
-      ),
+      cloudOverride
+        ? safeFetchJson<{ points: PortfolioHistoryPoint[] }>('/api/portfolio/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              range,
+              holdings: cloudOverride.holdings,
+              totalCostBasisUsd: cloudOverride.totalCostBasisUsd,
+            }),
+          })
+        : safeFetchJson<{ points: PortfolioHistoryPoint[] }>(
+            `/api/portfolio/history?range=${range}`
+          ),
     async () => {
-      const store = loadLocalStore();
-      const tracked = getLocalTrackedAssets(store);
-      const snapshots = await fetchLocalMarketSnapshots(tracked, false);
-      const portfolio = computeLocalPortfolioSummary(store, snapshots);
-      const activeHoldings = portfolio.holdings.filter((h) => h.quantity > 0);
+      let activeHoldings: PortfolioHolding[];
+      let costBasisUsd: number;
+      if (cloudOverride) {
+        activeHoldings = cloudOverride.holdings.filter((h) => h.quantity > 0);
+        costBasisUsd = cloudOverride.totalCostBasisUsd;
+      } else {
+        const store = loadLocalStore();
+        const tracked = getLocalTrackedAssets(store);
+        const snapshots = await fetchLocalMarketSnapshots(tracked, false);
+        const portfolio = computeLocalPortfolioSummary(store, snapshots);
+        activeHoldings = portfolio.holdings.filter((h) => h.quantity > 0);
+        costBasisUsd = portfolio.totalCostBasisUsd;
+      }
       if (activeHoldings.length === 0) return { points: [] };
 
       const btcSeries = await fetchLocalSeriesForAsset(
@@ -1301,15 +1671,13 @@ export async function apiGetPortfolioHistory(
           if (s) totalValueUsd += h.quantity * findPriceAt(s, ts);
         }
         const profitPct =
-          portfolio.totalCostBasisUsd > 0
-            ? ((totalValueUsd - portfolio.totalCostBasisUsd) /
-                portfolio.totalCostBasisUsd) *
-              100
+          costBasisUsd > 0
+            ? ((totalValueUsd - costBasisUsd) / costBasisUsd) * 100
             : 0;
         return {
           timestamp: ts,
           totalValueUsd: Number(totalValueUsd.toFixed(2)),
-          costBasisUsd: Number(portfolio.totalCostBasisUsd.toFixed(2)),
+          costBasisUsd: Number(costBasisUsd.toFixed(2)),
           profitPct: Number(profitPct.toFixed(2)),
           btcTrendPct: Number(btcTrendPct.toFixed(2)),
         };

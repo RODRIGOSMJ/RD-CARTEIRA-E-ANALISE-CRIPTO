@@ -89,7 +89,10 @@ export function PortfolioView({
 
     let active = true;
     setHistoryLoading(true);
-    apiGetPortfolioHistory(chartRange)
+    apiGetPortfolioHistory(chartRange, {
+      holdings: portfolio.holdings,
+      totalCostBasisUsd: portfolio.totalCostBasisUsd,
+    })
       .then((data) => {
         if (!active) return;
         setHistoryPoints(data.points ?? []);
@@ -103,7 +106,12 @@ export function PortfolioView({
     return () => {
       active = false;
     };
-  }, [chartRange, portfolio.holdings.length, portfolio.transactions.length]);
+  }, [
+    chartRange,
+    portfolio.holdings.length,
+    portfolio.transactions.length,
+    portfolio.totalCostBasisUsd,
+  ]);
 
   const maskValue = (val: string) => (hideBalances ? '••••••' : val);
 

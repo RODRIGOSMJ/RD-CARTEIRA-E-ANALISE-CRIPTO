@@ -15,32 +15,78 @@
       "action": "COMPRAR",
       "confidence": 64,
       "horizon": "curto_prazo",
-      "entryZoneLowUsd": 68.8,
-      "entryZoneHighUsd": 69.6,
-      "targetPriceUsd": 73.6,
+      "entryZoneLowUsd": 69.13,
+      "entryZoneHighUsd": 70.5,
+      "targetPriceUsd": 74.8,
       "stopLossUsd": 67.9,
       "riskLevel": "elevado",
-      "headline": "SOL em sobrevenda extrema próximo ao suporte; repique técnico possível",
-      "thesis": "O ativo sofreu queda de 10,84% em 24h e 22,56% em 7d, atingindo RSI 14 de 19,32 e Banda de Bollinger %B em 4,9%, configurando exaustão vendedora junto ao suporte de US$ 69,13. Apesar da tendência principal de baixa nas EMAs e MACD negativo, a leve reação positiva de 0,46% na última hora com volume elevado sugere oportunidade tática de repique até a média central de Bollinger em US$ 73,67.",
-      "portfolioAdvice": "Você possui 5 SOL com preço médio de US$ 69,47 (praticamente no zero a zero, -0,03%), mas com concentração crítica de 100% da carteira em um único ativo. Mantenha a posição atual protegida com stop loss abaixo de US$ 67,90 para capturar o repique até US$ 73,60 e evite aportar mais capital para não agravar o risco de concentração.",
+      "headline": "SOL em sobrevenda extrema próximo ao suporte de US$ 69,13",
+      "thesis": "Após recuar 10,23% em 24 horas, SOL atingiu RSI de 26,72 e Bollinger %B de 16,3%, sinalizando exaustão vendedora junto ao suporte em US$ 69,13. Apesar do MACD e das EMAs ainda apontarem tendência de baixa, o forte volume de negociação favorece um repique técnico de curto prazo em direção à média central de Bollinger.",
+      "portfolioAdvice": "Você possui 5 SOL com preço médio de US$ 69,47 e lucro atual de 1,18% (US$ 4,10), mas com 100% da carteira concentrada em um único ativo. Como a exposição supera o limite saudável de 40%, evite aportar mais capital agora; mantenha a posição atual protegida por stop abaixo de US$ 67,90 e avalie realizar lucro parcial próximo a US$ 74,80 para reduzir risco.",
       "technicalFactors": [
-        "RSI 14 em 19,32 indica sobrevenda extrema com alto potencial de alívio comprador no curto prazo.",
-        "Bollinger %B em 4,9% com preço em US$ 69,45 testando a banda inferior (US$ 69,00) e suporte em US$ 69,13.",
-        "Momentum de volume em 188% acompanhando estabilização inicial de +0,46% na última hora."
+        "RSI 14 em 26,72 indicando condição severa de sobrevenda no curto prazo.",
+        "Bandas de Bollinger com %B em 16,3%, próximo à banda inferior de US$ 68,76 e ao suporte de US$ 69,13.",
+        "Momentum de volume elevado em +73,7%, sugerindo absorção compradora na região de fundo."
       ],
       "riskFactors": [
-        "Perda consistente do suporte em US$ 69,13 e da mínima de 24h em US$ 68,60 pode acelerar novas liquidações.",
-        "EMAs 9/21/50 alinhadas em tendência de baixa e histograma MACD ainda negativo (-0,3838) mostram que a reversão não foi confirmada."
+        "MACD negativo (-0,249 no histograma) e EMAs alinhadas em baixa podem prolongar a queda se o suporte de US$ 69,13 for perdido.",
+        "Perda da mínima de 24h em US$ 68,60 invalida a tese de repique e acelera o movimento corretivo."
       ],
-      "selfLearningNote": "Ciclo inicial de avaliação sem histórico prévio registrado; este sinal servirá de referência para validar a eficácia de compras contra-tendência em sobrevenda extrema com RSI abaixo de 20.",
-      "priceAtAnalysisUsd": 69.45,
-      "analyzedAt": "2026-11-14T23:43:20.107Z",
-      "cycleId": "cycle_1794699789613"
+      "selfLearningNote": "O sinal anterior de COMPRAR a US$ 70,27 permanece praticamente estável (+0,03% a US$ 70,29), validando a defesa inicial do suporte, embora a falta de virada positiva do MACD mantenha a necessidade de cautela e stop curto.",
+      "priceAtAnalysisUsd": 70.29,
+      "analyzedAt": "2026-11-15T00:04:22.591Z",
+      "cycleId": "cycle_1794701052835"
     }
   },
-  "alerts": [],
+  "alerts": [
+    {
+      "id": "alert_solana_1794700752736_35h1",
+      "coinId": "solana",
+      "symbol": "SOL",
+      "name": "Solana",
+      "action": "COMPRAR",
+      "previousAction": "COMPRAR",
+      "confidence": 65,
+      "priceAtSignalUsd": 70.27,
+      "targetPriceUsd": 73.7,
+      "stopLossUsd": 67.5,
+      "headline": "SOL em sobrevenda extrema próximo ao suporte de US$ 69,13",
+      "reason": "Apesar da tendência de baixa nas EMAs (9, 21 e 50) e do MACD negativo, o RSI 14 em 26,56 e a Banda de Bollinger %B em 12,1% indicam sobrevenda acentuada junto ao suporte de US$ 69,13. O repique de 1,65% na última hora com momentum de volume em 212,7% sugere absorção vendedora e potencial de recuperação técnica até a média de Bollinger em US$ 73,71.",
+      "createdAt": "2026-11-14T23:59:12.736Z",
+      "read": false,
+      "outcome": "em_aberto",
+      "evaluatedReturnPct": -0.48,
+      "evaluatedAt": "2026-11-15T00:07:47.533Z"
+    }
+  ],
   "priceTriggers": [],
   "studyHistory": [
+    {
+      "id": "cycle_1794701052835",
+      "startedAt": "2026-11-15T00:04:12.835Z",
+      "completedAt": "2026-11-15T00:04:22.591Z",
+      "assetsStudied": 1,
+      "buySignals": 1,
+      "sellSignals": 0,
+      "holdSignals": 0,
+      "alertsEmitted": 0,
+      "evaluatedAccuracyPct": null,
+      "trigger": "automatico",
+      "marketSummary": "O mercado apresenta forte pressão vendedora no curto prazo, levando Solana a níveis extremos de sobrevenda após queda semanal de 21,1%. Sua carteira está com 100% de alocação em SOL e leve lucro de 1,18%, exigindo gestão de risco rigorosa."
+    },
+    {
+      "id": "cycle_1794700742890",
+      "startedAt": "2026-11-14T23:59:02.890Z",
+      "completedAt": "2026-11-14T23:59:12.736Z",
+      "assetsStudied": 1,
+      "buySignals": 1,
+      "sellSignals": 0,
+      "holdSignals": 0,
+      "alertsEmitted": 1,
+      "evaluatedAccuracyPct": null,
+      "trigger": "automatico",
+      "marketSummary": "O mercado apresenta forte pressão vendedora recente, levando Solana a níveis de sobrevenda extrema próximos ao suporte com sinais iniciais de defesa compradora. A carteira está 100% concentrada em SOL, exigindo gestão rigorosa de risco e disciplina no stop."
+    },
     {
       "id": "cycle_1794699789613",
       "startedAt": "2026-11-14T23:43:09.613Z",

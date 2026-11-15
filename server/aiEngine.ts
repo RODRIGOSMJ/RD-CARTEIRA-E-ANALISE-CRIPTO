@@ -1,7 +1,10 @@
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import type {
   AIAnalysisResult,
+  AppSettings,
   MarketSnapshot,
+  PortfolioHolding,
+  PortfolioSummary,
   SignalAction,
   SignalAlert,
   StudyCycleSummary,
@@ -85,25 +88,49 @@ export async function dispatchWebhookNotification(
   }
 }
 
+export interface StatelessStudyContext {
+  previousAnalyses: Record<string, AIAnalysisResult>;
+  recentAlerts: SignalAlert[];
+  portfolioSummary: PortfolioSummary;
+  settings: AppSettings;
+  accuracyStats: {
+    totalEvaluated: number;
+    hits: number;
+    neutrals: number;
+    misses: number;
+    accuracyPct: number | null;
+  };
+}
+
 export async function runAutonomousStudyCycle(
   assetsToStudy: WatchlistAsset[],
   snapshots: Record<string, MarketSnapshot>,
   trigger: 'automatico' | 'manual' | 'novo_ativo' = 'automatico',
-  onProgress?: (event: { type: string; message: string }) => void
+  onProgress?: (event: { type: string; message: string }) => void,
+  statelessContext?: StatelessStudyContext
 ): Promise<{
   cycle: StudyCycleSummary;
   newAlerts: SignalAlert[];
   analyses: Record<string, AIAnalysisResult>;
+  returnedAnalysesList: AIAnalysisResult[];
 }> {
   const store = getStore();
   const startedAt = new Date().toISOString();
   const cycleId = `cycle_${Date.now()}`;
 
   // 1. Self-evaluation: measure how previous signals performed before studying again
-  evaluatePastAlerts(snapshots);
-  const accuracyStats = getAccuracyStats();
-  const portfolioSummary = computePortfolioSummary(snapshots);
-  const holdingsByCoin = new Map(
+  if (!statelessContext) {
+    evaluatePastAlerts(snapshots);
+  }
+  const accuracyStats = statelessContext ? statelessContext.accuracyStats : getAccuracyStats();
+  const portfolioSummary = statelessContext
+    ? statelessContext.portfolioSummary
+    : computePortfolioSummary(snapshots);
+  const activeAnalyses = statelessContext ? statelessContext.previousAnalyses : store.analyses;
+  const activeAlerts = statelessContext ? statelessContext.recentAlerts : store.alerts;
+  const activeSettings = statelessContext ? statelessContext.settings : store.settings;
+
+  const holdingsByCoin = new Map<string, PortfolioHolding>(
     portfolioSummary.holdings.map((h) => [h.coinId, h])
   );
 
@@ -126,9 +153,9 @@ export async function runAutonomousStudyCycle(
         const snap = snapshots[asset.id];
         if (!snap || snap.priceUsd <= 0) return null;
 
-        const prevAnalysis = store.analyses[asset.id];
+        const prevAnalysis = activeAnalyses[asset.id];
         const holding = holdingsByCoin.get(asset.id);
-        const recentAlerts = store.alerts
+        const recentAlerts = activeAlerts
           .filter((a) => a.coinId === asset.id)
           .slice(0, 3)
           .map((a) => ({
@@ -406,18 +433,20 @@ ${JSON.stringify(contextPayload, null, 2)}
   let sellSignals = 0;
   let holdSignals = 0;
 
+  const nextAnalysesMap: Record<string, AIAnalysisResult> = { ...activeAnalyses };
+
   for (const analysis of allReturnedAnalyses) {
     if (analysis.action === 'COMPRAR') buySignals++;
     else if (analysis.action === 'VENDER') sellSignals++;
     else holdSignals++;
 
-    const prev = store.analyses[analysis.coinId];
+    const prev = activeAnalyses[analysis.coinId];
     const actionChanged = !prev || prev.action !== analysis.action;
     const isActionableHighConviction =
       (analysis.action === 'COMPRAR' || analysis.action === 'VENDER') &&
-      analysis.confidence >= store.settings.minConfidenceForAlert;
+      analysis.confidence >= activeSettings.minConfidenceForAlert;
 
-    const latestAlertForCoin = store.alerts.find((a) => a.coinId === analysis.coinId);
+    const latestAlertForCoin = activeAlerts.find((a) => a.coinId === analysis.coinId);
     const hoursSinceLastAlert = latestAlertForCoin
       ? (Date.now() - new Date(latestAlertForCoin.createdAt).getTime()) / 3600_000
       : 999;
@@ -447,14 +476,16 @@ ${JSON.stringify(contextPayload, null, 2)}
       newAlerts.push(alert);
     }
 
-    store.analyses[analysis.coinId] = analysis;
+    nextAnalysesMap[analysis.coinId] = analysis;
+    if (!statelessContext) {
+      store.analyses[analysis.coinId] = analysis;
+    }
   }
 
-  if (newAlerts.length > 0) {
+  if (!statelessContext && newAlerts.length > 0) {
     store.alerts = [...newAlerts, ...store.alerts].slice(0, 120);
   }
 
-  const updatedStats = getAccuracyStats();
   const cycle: StudyCycleSummary = {
     id: cycleId,
     startedAt,
@@ -464,23 +495,25 @@ ${JSON.stringify(contextPayload, null, 2)}
     sellSignals,
     holdSignals,
     alertsEmitted: newAlerts.length,
-    evaluatedAccuracyPct: updatedStats.accuracyPct,
+    evaluatedAccuracyPct: accuracyStats.accuracyPct,
     trigger,
     marketSummary:
       overallMarketSummary ||
       `Ciclo concluído em ${allReturnedAnalyses.length} criptoativos (${buySignals} compras, ${sellSignals} vendas, ${holdSignals} aguardando).`,
   };
 
-  store.studyHistory = [cycle, ...store.studyHistory].slice(0, 40);
-  saveStore();
+  if (!statelessContext) {
+    store.studyHistory = [cycle, ...store.studyHistory].slice(0, 40);
+    saveStore();
+  }
 
-  if (store.settings.webhookUrl && newAlerts.length > 0) {
-    void dispatchWebhookNotification(store.settings.webhookUrl, newAlerts);
+  if (activeSettings.webhookUrl && newAlerts.length > 0) {
+    void dispatchWebhookNotification(activeSettings.webhookUrl, newAlerts);
   }
 
   if (
-    store.settings.whatsapp?.forwardAiSignals &&
-    isWhatsAppConfigured(store.settings.whatsapp) &&
+    activeSettings.whatsapp?.forwardAiSignals &&
+    isWhatsAppConfigured(activeSettings.whatsapp) &&
     newAlerts.length > 0
   ) {
     const actionable = newAlerts.filter(
@@ -489,7 +522,7 @@ ${JSON.stringify(contextPayload, null, 2)}
     if (actionable.length > 0) {
       void getUsdBrlRate().then((rate) => {
         const text = formatAiAlertsWhatsAppText(actionable, rate);
-        return sendWhatsAppMessage(store.settings.whatsapp, text, {
+        return sendWhatsAppMessage(activeSettings.whatsapp, text, {
           type: 'ai_signals',
           alerts: actionable,
         });
@@ -500,6 +533,7 @@ ${JSON.stringify(contextPayload, null, 2)}
   return {
     cycle,
     newAlerts,
-    analyses: store.analyses,
+    analyses: statelessContext ? nextAnalysesMap : store.analyses,
+    returnedAnalysesList: allReturnedAnalyses,
   };
 }

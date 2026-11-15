@@ -1,0 +1,574 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Reusable Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isVerifiedOwner(userId) {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.uid == userId;
+    }
+
+    // String list guard (bounded size + safe first-element check)
+    function isBoundedStringList(arr, maxItems, maxItemLen) {
+      return arr is list
+        && arr.size() <= maxItems
+        && (arr.size() == 0 || (arr[0] is string && arr[0].size() <= maxItemLen));
+    }
+
+    // WhatsApp settings nested map validator
+    function isValidWhatsAppMap(w) {
+      return w is map
+        && w.keys().hasAll([
+          'enabled',
+          'provider',
+          'phoneNumber',
+          'callMeBotApiKey',
+          'customWebhookUrl',
+          'customWebhookToken',
+          'metaPhoneNumberId',
+          'metaAccessToken',
+          'forwardAiSignals'
+        ])
+        && w.keys().hasOnly([
+          'enabled',
+          'provider',
+          'phoneNumber',
+          'callMeBotApiKey',
+          'customWebhookUrl',
+          'customWebhookToken',
+          'metaPhoneNumberId',
+          'metaAccessToken',
+          'forwardAiSignals'
+        ])
+        && w.enabled is bool
+        && w.provider is string
+        && w.provider in ['callmebot', 'webhook_rest', 'meta_cloud']
+        && w.phoneNumber is string && w.phoneNumber.size() <= 32
+        && w.callMeBotApiKey is string && w.callMeBotApiKey.size() <= 200
+        && w.customWebhookUrl is string && w.customWebhookUrl.size() <= 500
+        && w.customWebhookToken is string && w.customWebhookToken.size() <= 300
+        && w.metaPhoneNumberId is string && w.metaPhoneNumberId.size() <= 100
+        && w.metaAccessToken is string && w.metaAccessToken.size() <= 500
+        && w.forwardAiSignals is bool;
+    }
+
+    // Settings nested map validator
+    function isValidSettingsMap(s) {
+      return s is map
+        && s.keys().hasAll([
+          'autoStudyEnabled',
+          'intervalMinutes',
+          'currency',
+          'minConfidenceForAlert',
+          'webhookUrl',
+          'whatsapp'
+        ])
+        && s.keys().hasOnly([
+          'autoStudyEnabled',
+          'intervalMinutes',
+          'currency',
+          'minConfidenceForAlert',
+          'webhookUrl',
+          'whatsapp'
+        ])
+        && s.autoStudyEnabled is bool
+        && s.intervalMinutes is number && s.intervalMinutes >= 1 && s.intervalMinutes <= 120
+        && s.currency is string && s.currency in ['USD', 'BRL']
+        && s.minConfidenceForAlert is number && s.minConfidenceForAlert >= 40 && s.minConfidenceForAlert <= 95
+        && s.webhookUrl is string && s.webhookUrl.size() <= 500
+        && isValidWhatsAppMap(s.whatsapp);
+    }
+
+    // Entity Validators
+    function isValidUserCloudProfile(data, userId) {
+      return data.keys().hasAll(['ownerId', 'portfolioName', 'settings', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'portfolioName', 'settings', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.portfolioName is string && data.portfolioName.size() >= 1 && data.portfolioName.size() <= 60
+        && isValidSettingsMap(data.settings)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWatchlistAsset(data, userId) {
+      return data.keys().hasAll(['ownerId', 'id', 'symbol', 'name', 'addedAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'id', 'symbol', 'name', 'binanceSymbol', 'addedAt', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 128
+        && data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 24
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && (!('binanceSymbol' in data) || (data.binanceSymbol is string && data.binanceSymbol.size() <= 36))
+        && data.addedAt is string && data.addedAt.size() >= 1 && data.addedAt.size() <= 48
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPortfolioTransaction(data, userId, txId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'id',
+          'coinId',
+          'symbol',
+          'name',
+          'type',
+          'quantity',
+          'pricePerCoinUsd',
+          'feeUsd',
+          'timestamp',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'id',
+          'coinId',
+          'symbol',
+          'name',
+          'type',
+          'quantity',
+          'pricePerCoinUsd',
+          'feeUsd',
+          'timestamp',
+          'note',
+          'createdAt'
+        ])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.id is string && isValidId(data.id) && data.id == txId
+        && data.coinId is string && data.coinId.size() >= 1 && data.coinId.size() <= 128
+        && data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 24
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.type is string && data.type in ['compra', 'venda', 'ganho']
+        && data.quantity is number && data.quantity > 0
+        && data.pricePerCoinUsd is number && data.pricePerCoinUsd >= 0
+        && data.feeUsd is number && data.feeUsd >= 0
+        && data.timestamp is string && data.timestamp.size() >= 1 && data.timestamp.size() <= 48
+        && (!('note' in data) || (data.note is string && data.note.size() <= 200))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPriceTrigger(data, userId, triggerId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'id',
+          'coinId',
+          'symbol',
+          'name',
+          'conditionType',
+          'targetValue',
+          'referencePriceUsd',
+          'actionHint',
+          'repeatMode',
+          'cooldownMinutes',
+          'enabled',
+          'sendWhatsApp',
+          'createdAtStr',
+          'triggerCount',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'id',
+          'coinId',
+          'symbol',
+          'name',
+          'conditionType',
+          'targetValue',
+          'referencePriceUsd',
+          'actionHint',
+          'repeatMode',
+          'cooldownMinutes',
+          'enabled',
+          'sendWhatsApp',
+          'note',
+          'createdAtStr',
+          'lastTriggeredAt',
+          'lastTriggeredPriceUsd',
+          'lastDeliveryStatus',
+          'lastDeliveryError',
+          'triggerCount',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.id is string && isValidId(data.id) && data.id == triggerId
+        && data.coinId is string && data.coinId.size() >= 1 && data.coinId.size() <= 128
+        && data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 24
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.conditionType is string && data.conditionType in ['queda_pct', 'alta_pct', 'abaixo_preco', 'acima_preco']
+        && data.targetValue is number && data.targetValue > 0
+        && data.referencePriceUsd is number && data.referencePriceUsd >= 0
+        && data.actionHint is string && data.actionHint in ['COMPRAR', 'VENDER', 'AVALIAR']
+        && data.repeatMode is string && data.repeatMode in ['uma_vez', 'continuo']
+        && data.cooldownMinutes is number && data.cooldownMinutes >= 1 && data.cooldownMinutes <= 1440
+        && data.enabled is bool
+        && data.sendWhatsApp is bool
+        && (!('note' in data) || (data.note is string && data.note.size() <= 200))
+        && data.createdAtStr is string && data.createdAtStr.size() >= 1 && data.createdAtStr.size() <= 48
+        && (!('lastTriggeredAt' in data) || (data.lastTriggeredAt is string && data.lastTriggeredAt.size() <= 48))
+        && (!('lastTriggeredPriceUsd' in data) || data.lastTriggeredPriceUsd is number)
+        && (!('lastDeliveryStatus' in data) || (data.lastDeliveryStatus is string && data.lastDeliveryStatus in ['enviado', 'falha', 'sem_whatsapp']))
+        && (!('lastDeliveryError' in data) || (data.lastDeliveryError is string && data.lastDeliveryError.size() <= 300))
+        && data.triggerCount is number && data.triggerCount >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSignalAlert(data, userId, alertId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'id',
+          'coinId',
+          'symbol',
+          'name',
+          'action',
+          'confidence',
+          'priceAtSignalUsd',
+          'targetPriceUsd',
+          'stopLossUsd',
+          'headline',
+          'reason',
+          'createdAtStr',
+          'read',
+          'outcome',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'id',
+          'coinId',
+          'symbol',
+          'name',
+          'action',
+          'previousAction',
+          'confidence',
+          'priceAtSignalUsd',
+          'targetPriceUsd',
+          'stopLossUsd',
+          'headline',
+          'reason',
+          'createdAtStr',
+          'read',
+          'outcome',
+          'evaluatedReturnPct',
+          'evaluatedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.id is string && isValidId(data.id) && data.id == alertId
+        && data.coinId is string && data.coinId.size() >= 1 && data.coinId.size() <= 128
+        && data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 24
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.action is string && data.action in ['COMPRAR', 'VENDER', 'ESPERAR']
+        && (!('previousAction' in data) || (data.previousAction is string && data.previousAction in ['COMPRAR', 'VENDER', 'ESPERAR']))
+        && data.confidence is number && data.confidence >= 0 && data.confidence <= 100
+        && data.priceAtSignalUsd is number && data.priceAtSignalUsd >= 0
+        && data.targetPriceUsd is number && data.targetPriceUsd >= 0
+        && data.stopLossUsd is number && data.stopLossUsd >= 0
+        && data.headline is string && data.headline.size() <= 300
+        && data.reason is string && data.reason.size() <= 2000
+        && data.createdAtStr is string && data.createdAtStr.size() >= 1 && data.createdAtStr.size() <= 48
+        && data.read is bool
+        && data.outcome is string && data.outcome in ['em_aberto', 'acerto', 'neutro', 'erro']
+        && (!('evaluatedReturnPct' in data) || data.evaluatedReturnPct is number)
+        && (!('evaluatedAt' in data) || (data.evaluatedAt is string && data.evaluatedAt.size() <= 48))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAIAnalysis(data, userId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'coinId',
+          'symbol',
+          'action',
+          'confidence',
+          'horizon',
+          'entryZoneLowUsd',
+          'entryZoneHighUsd',
+          'targetPriceUsd',
+          'stopLossUsd',
+          'riskLevel',
+          'headline',
+          'thesis',
+          'technicalFactors',
+          'riskFactors',
+          'selfLearningNote',
+          'priceAtAnalysisUsd',
+          'analyzedAt',
+          'cycleId',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'coinId',
+          'symbol',
+          'action',
+          'confidence',
+          'horizon',
+          'entryZoneLowUsd',
+          'entryZoneHighUsd',
+          'targetPriceUsd',
+          'stopLossUsd',
+          'riskLevel',
+          'headline',
+          'thesis',
+          'portfolioAdvice',
+          'technicalFactors',
+          'riskFactors',
+          'selfLearningNote',
+          'priceAtAnalysisUsd',
+          'analyzedAt',
+          'cycleId',
+          'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.coinId is string && data.coinId.size() >= 1 && data.coinId.size() <= 128
+        && data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 24
+        && data.action is string && data.action in ['COMPRAR', 'VENDER', 'ESPERAR']
+        && data.confidence is number && data.confidence >= 0 && data.confidence <= 100
+        && data.horizon is string && data.horizon in ['curto_prazo', 'medio_prazo', 'swing']
+        && data.entryZoneLowUsd is number && data.entryZoneLowUsd >= 0
+        && data.entryZoneHighUsd is number && data.entryZoneHighUsd >= 0
+        && data.targetPriceUsd is number && data.targetPriceUsd >= 0
+        && data.stopLossUsd is number && data.stopLossUsd >= 0
+        && data.riskLevel is string && data.riskLevel in ['baixo', 'moderado', 'elevado']
+        && data.headline is string && data.headline.size() <= 300
+        && data.thesis is string && data.thesis.size() <= 3000
+        && (!('portfolioAdvice' in data) || (data.portfolioAdvice is string && data.portfolioAdvice.size() <= 1500))
+        && isBoundedStringList(data.technicalFactors, 10, 400)
+        && isBoundedStringList(data.riskFactors, 10, 400)
+        && data.selfLearningNote is string && data.selfLearningNote.size() <= 1000
+        && data.priceAtAnalysisUsd is number && data.priceAtAnalysisUsd >= 0
+        && data.analyzedAt is string && data.analyzedAt.size() >= 1 && data.analyzedAt.size() <= 48
+        && data.cycleId is string && data.cycleId.size() >= 1 && data.cycleId.size() <= 128
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStudyCycle(data, userId, cycleId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'id',
+          'startedAt',
+          'completedAt',
+          'assetsStudied',
+          'buySignals',
+          'sellSignals',
+          'holdSignals',
+          'alertsEmitted',
+          'trigger',
+          'marketSummary',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'id',
+          'startedAt',
+          'completedAt',
+          'assetsStudied',
+          'buySignals',
+          'sellSignals',
+          'holdSignals',
+          'alertsEmitted',
+          'evaluatedAccuracyPct',
+          'trigger',
+          'marketSummary',
+          'createdAt'
+        ])
+        && data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.id is string && isValidId(data.id) && data.id == cycleId
+        && data.startedAt is string && data.startedAt.size() >= 1 && data.startedAt.size() <= 48
+        && data.completedAt is string && data.completedAt.size() >= 1 && data.completedAt.size() <= 48
+        && data.assetsStudied is number && data.assetsStudied >= 0
+        && data.buySignals is number && data.buySignals >= 0
+        && data.sellSignals is number && data.sellSignals >= 0
+        && data.holdSignals is number && data.holdSignals >= 0
+        && data.alertsEmitted is number && data.alertsEmitted >= 0
+        && (!('evaluatedAccuracyPct' in data) || data.evaluatedAccuracyPct == null || data.evaluatedAccuracyPct is number)
+        && data.trigger is string && data.trigger in ['automatico', 'manual', 'novo_ativo']
+        && data.marketSummary is string && data.marketSummary.size() <= 2000
+        && data.createdAt is timestamp;
+    }
+
+    // Master User Workspace Document (PII & Private Settings)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isVerifiedOwner(userId);
+      allow create: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserCloudProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserCloudProfile(incoming(), userId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['portfolioName', 'settings', 'updatedAt'])
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(userId) && isVerifiedOwner(userId);
+
+      // Watchlist Assets Subcollection
+      match /watchlist/{assetId} {
+        allow get: if isValidId(userId) && isValidId(assetId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(assetId)
+          && isVerifiedOwner(userId)
+          && isValidWatchlistAsset(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(assetId)
+          && isVerifiedOwner(userId)
+          && isValidWatchlistAsset(incoming(), userId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['symbol', 'name', 'binanceSymbol', 'updatedAt'])
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time;
+        allow delete: if isValidId(userId) && isValidId(assetId) && isVerifiedOwner(userId);
+      }
+
+      // Portfolio Transactions Subcollection
+      match /transactions/{txId} {
+        allow get: if isValidId(userId) && isValidId(txId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(txId)
+          && isVerifiedOwner(userId)
+          && isValidPortfolioTransaction(incoming(), userId, txId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().createdAt == request.time;
+        allow delete: if isValidId(userId) && isValidId(txId) && isVerifiedOwner(userId);
+      }
+
+      // 24/7 Price Triggers Subcollection
+      match /triggers/{triggerId} {
+        allow get: if isValidId(userId) && isValidId(triggerId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(triggerId)
+          && isVerifiedOwner(userId)
+          && isValidPriceTrigger(incoming(), userId, triggerId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(triggerId)
+          && isVerifiedOwner(userId)
+          && isValidPriceTrigger(incoming(), userId, triggerId)
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'targetValue',
+            'referencePriceUsd',
+            'actionHint',
+            'repeatMode',
+            'cooldownMinutes',
+            'enabled',
+            'sendWhatsApp',
+            'note',
+            'lastTriggeredAt',
+            'lastTriggeredPriceUsd',
+            'lastDeliveryStatus',
+            'lastDeliveryError',
+            'triggerCount',
+            'updatedAt'
+          ])
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time;
+        allow delete: if isValidId(userId) && isValidId(triggerId) && isVerifiedOwner(userId);
+      }
+
+      // Signal & Trigger Alerts Subcollection
+      match /alerts/{alertId} {
+        allow get: if isValidId(userId) && isValidId(alertId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(alertId)
+          && isVerifiedOwner(userId)
+          && isValidSignalAlert(incoming(), userId, alertId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(alertId)
+          && isVerifiedOwner(userId)
+          && isValidSignalAlert(incoming(), userId, alertId)
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'read',
+            'outcome',
+            'evaluatedReturnPct',
+            'evaluatedAt',
+            'updatedAt'
+          ])
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time;
+        allow delete: if isValidId(userId) && isValidId(alertId) && isVerifiedOwner(userId);
+      }
+
+      // AI Analyses Subcollection
+      match /analyses/{coinId} {
+        allow get: if isValidId(userId) && isValidId(coinId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(coinId)
+          && isVerifiedOwner(userId)
+          && isValidAIAnalysis(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(coinId)
+          && isVerifiedOwner(userId)
+          && isValidAIAnalysis(incoming(), userId)
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'symbol',
+            'action',
+            'confidence',
+            'horizon',
+            'entryZoneLowUsd',
+            'entryZoneHighUsd',
+            'targetPriceUsd',
+            'stopLossUsd',
+            'riskLevel',
+            'headline',
+            'thesis',
+            'portfolioAdvice',
+            'technicalFactors',
+            'riskFactors',
+            'selfLearningNote',
+            'priceAtAnalysisUsd',
+            'analyzedAt',
+            'cycleId',
+            'updatedAt'
+          ])
+          && incoming().ownerId == existing().ownerId
+          && incoming().coinId == existing().coinId
+          && incoming().updatedAt == request.time;
+        allow delete: if isValidId(userId) && isValidId(coinId) && isVerifiedOwner(userId);
+      }
+
+      // Study History Subcollection
+      match /studyHistory/{cycleId} {
+        allow get: if isValidId(userId) && isValidId(cycleId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(cycleId)
+          && isVerifiedOwner(userId)
+          && isValidStudyCycle(incoming(), userId, cycleId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().createdAt == request.time;
+        allow delete: if isValidId(userId) && isValidId(cycleId) && isVerifiedOwner(userId);
+      }
+    }
+  }
+}

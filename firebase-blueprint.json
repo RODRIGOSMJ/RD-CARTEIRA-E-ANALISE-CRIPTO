@@ -1,0 +1,568 @@
+{
+  "entities": {
+    "UserCloudProfile": {
+      "title": "UserCloudProfile",
+      "description": "User workspace preferences, portfolio name, and WhatsApp notification settings synchronized across devices.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "portfolioName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "settings": {
+          "type": "object",
+          "description": "Automation and WhatsApp configuration map."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "portfolioName", "settings", "createdAt", "updatedAt"]
+    },
+    "WatchlistAssetDoc": {
+      "title": "WatchlistAssetDoc",
+      "description": "Monitored cryptocurrency asset synchronized per user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "binanceSymbol": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "addedAt": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "id", "symbol", "name", "addedAt", "createdAt", "updatedAt"]
+    },
+    "PortfolioTransactionDoc": {
+      "title": "PortfolioTransactionDoc",
+      "description": "Portfolio buy, sell, or gain transaction synchronized across devices.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "coinId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "type": {
+          "type": "string",
+          "enum": ["compra", "venda", "ganho"]
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "pricePerCoinUsd": {
+          "type": "number"
+        },
+        "feeUsd": {
+          "type": "number"
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "id",
+        "coinId",
+        "symbol",
+        "name",
+        "type",
+        "quantity",
+        "pricePerCoinUsd",
+        "feeUsd",
+        "timestamp",
+        "createdAt"
+      ]
+    },
+    "PriceTriggerDoc": {
+      "title": "PriceTriggerDoc",
+      "description": "24/7 price trigger rule synchronized across user devices.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "coinId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "conditionType": {
+          "type": "string",
+          "enum": ["queda_pct", "alta_pct", "abaixo_preco", "acima_preco"]
+        },
+        "targetValue": {
+          "type": "number"
+        },
+        "referencePriceUsd": {
+          "type": "number"
+        },
+        "actionHint": {
+          "type": "string",
+          "enum": ["COMPRAR", "VENDER", "AVALIAR"]
+        },
+        "repeatMode": {
+          "type": "string",
+          "enum": ["uma_vez", "continuo"]
+        },
+        "cooldownMinutes": {
+          "type": "number"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "sendWhatsApp": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAtStr": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "lastTriggeredAt": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "lastTriggeredPriceUsd": {
+          "type": "number"
+        },
+        "lastDeliveryStatus": {
+          "type": "string",
+          "enum": ["enviado", "falha", "sem_whatsapp"]
+        },
+        "lastDeliveryError": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "triggerCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "id",
+        "coinId",
+        "symbol",
+        "name",
+        "conditionType",
+        "targetValue",
+        "referencePriceUsd",
+        "actionHint",
+        "repeatMode",
+        "cooldownMinutes",
+        "enabled",
+        "sendWhatsApp",
+        "createdAtStr",
+        "triggerCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SignalAlertDoc": {
+      "title": "SignalAlertDoc",
+      "description": "Emitted AI or trigger alert synchronized across devices.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "coinId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "action": {
+          "type": "string",
+          "enum": ["COMPRAR", "VENDER", "ESPERAR"]
+        },
+        "previousAction": {
+          "type": "string",
+          "enum": ["COMPRAR", "VENDER", "ESPERAR"]
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "priceAtSignalUsd": {
+          "type": "number"
+        },
+        "targetPriceUsd": {
+          "type": "number"
+        },
+        "stopLossUsd": {
+          "type": "number"
+        },
+        "headline": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "createdAtStr": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["em_aberto", "acerto", "neutro", "erro"]
+        },
+        "evaluatedReturnPct": {
+          "type": "number"
+        },
+        "evaluatedAt": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "id",
+        "coinId",
+        "symbol",
+        "name",
+        "action",
+        "confidence",
+        "priceAtSignalUsd",
+        "targetPriceUsd",
+        "stopLossUsd",
+        "headline",
+        "reason",
+        "createdAtStr",
+        "read",
+        "outcome",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AIAnalysisDoc": {
+      "title": "AIAnalysisDoc",
+      "description": "Latest AI analysis result per monitored asset.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "coinId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "action": {
+          "type": "string",
+          "enum": ["COMPRAR", "VENDER", "ESPERAR"]
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "horizon": {
+          "type": "string",
+          "enum": ["curto_prazo", "medio_prazo", "swing"]
+        },
+        "entryZoneLowUsd": {
+          "type": "number"
+        },
+        "entryZoneHighUsd": {
+          "type": "number"
+        },
+        "targetPriceUsd": {
+          "type": "number"
+        },
+        "stopLossUsd": {
+          "type": "number"
+        },
+        "riskLevel": {
+          "type": "string",
+          "enum": ["baixo", "moderado", "elevado"]
+        },
+        "headline": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "thesis": {
+          "type": "string",
+          "maxLength": 3000
+        },
+        "portfolioAdvice": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "technicalFactors": {
+          "type": "array"
+        },
+        "riskFactors": {
+          "type": "array"
+        },
+        "selfLearningNote": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "priceAtAnalysisUsd": {
+          "type": "number"
+        },
+        "analyzedAt": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "cycleId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "coinId",
+        "symbol",
+        "action",
+        "confidence",
+        "horizon",
+        "entryZoneLowUsd",
+        "entryZoneHighUsd",
+        "targetPriceUsd",
+        "stopLossUsd",
+        "riskLevel",
+        "headline",
+        "thesis",
+        "technicalFactors",
+        "riskFactors",
+        "selfLearningNote",
+        "priceAtAnalysisUsd",
+        "analyzedAt",
+        "cycleId",
+        "updatedAt"
+      ]
+    },
+    "StudyCycleDoc": {
+      "title": "StudyCycleDoc",
+      "description": "Autonomous AI study cycle summary synchronized across devices.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "startedAt": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "completedAt": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "assetsStudied": {
+          "type": "number"
+        },
+        "buySignals": {
+          "type": "number"
+        },
+        "sellSignals": {
+          "type": "number"
+        },
+        "holdSignals": {
+          "type": "number"
+        },
+        "alertsEmitted": {
+          "type": "number"
+        },
+        "evaluatedAccuracyPct": {
+          "type": "number"
+        },
+        "trigger": {
+          "type": "string",
+          "enum": ["automatico", "manual", "novo_ativo"]
+        },
+        "marketSummary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "id",
+        "startedAt",
+        "completedAt",
+        "assetsStudied",
+        "buySignals",
+        "sellSignals",
+        "holdSignals",
+        "alertsEmitted",
+        "trigger",
+        "marketSummary",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserCloudProfile" },
+      "description": "Private user workspace settings, portfolio title, and WhatsApp preferences."
+    },
+    "/users/{userId}/watchlist/{assetId}": {
+      "schema": { "$ref": "#/entities/WatchlistAssetDoc" },
+      "description": "Monitored cryptocurrency assets belonging to the user."
+    },
+    "/users/{userId}/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/PortfolioTransactionDoc" },
+      "description": "Portfolio buy/sell/gain transactions belonging to the user."
+    },
+    "/users/{userId}/triggers/{triggerId}": {
+      "schema": { "$ref": "#/entities/PriceTriggerDoc" },
+      "description": "24/7 price triggers belonging to the user."
+    },
+    "/users/{userId}/alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/SignalAlertDoc" },
+      "description": "Signal and trigger alerts belonging to the user."
+    },
+    "/users/{userId}/analyses/{coinId}": {
+      "schema": { "$ref": "#/entities/AIAnalysisDoc" },
+      "description": "Latest AI analysis results per asset belonging to the user."
+    },
+    "/users/{userId}/studyHistory/{cycleId}": {
+      "schema": { "$ref": "#/entities/StudyCycleDoc" },
+      "description": "Autonomous study cycle history belonging to the user."
+    }
+  }
+}

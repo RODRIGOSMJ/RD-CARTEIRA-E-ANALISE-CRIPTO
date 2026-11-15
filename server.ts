@@ -2,8 +2,13 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
 import type {
+  AIAnalysisResult,
+  AppSettings,
   AppStatePayload,
+  PortfolioHolding,
+  PortfolioSummary,
   PriceTrigger,
+  SignalAlert,
   TriggerActionHint,
   TriggerConditionType,
   TriggerRepeatMode,
@@ -47,6 +52,7 @@ async function startServer() {
   let nextStudyAt: string | null = null;
   let studyTimer: ReturnType<typeof setInterval> | null = null;
   let marketTimer: ReturnType<typeof setInterval> | null = null;
+  let clientCloudActiveUntil = 0;
 
   function broadcastSSE(event: string, data: unknown) {
     const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -201,7 +207,10 @@ async function startServer() {
         getUsdBrlRate(),
       ]);
       evaluatePastAlerts(snapshots);
-      const { triggeredAlerts } = await evaluatePriceTriggers(snapshots, usdBrlRate);
+      const isCloudClientActive = Date.now() < clientCloudActiveUntil;
+      const { triggeredAlerts } = isCloudClientActive
+        ? { triggeredAlerts: [] }
+        : await evaluatePriceTriggers(snapshots, usdBrlRate);
 
       if (sseClients.size > 0) {
         broadcastSSE('market_tick', {
@@ -258,10 +267,21 @@ async function startServer() {
     try {
       const { coinId } = req.params;
       const rangeParam = req.query.range;
+      const symbolParam = String(req.query.symbol ?? '').trim();
       const range: '24h' | '7d' | '30d' =
         rangeParam === '24h' || rangeParam === '30d' ? rangeParam : '7d';
 
-      const asset = getStore().watchlist.find((a) => a.id === coinId);
+      const asset: WatchlistAsset | undefined =
+        getStore().watchlist.find((a) => a.id === coinId) ??
+        (symbolParam
+          ? {
+              id: coinId,
+              symbol: symbolParam.toUpperCase(),
+              name: coinId,
+              binanceSymbol: `${symbolParam.toUpperCase()}USDT`,
+              addedAt: new Date().toISOString(),
+            }
+          : undefined);
       if (!asset) {
         return res.status(404).json({ error: 'Criptoativo não encontrado na lista.' });
       }
@@ -871,6 +891,177 @@ async function startServer() {
       res.json({ state: fullState });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao limpar gatilhos.' });
+    }
+  });
+
+  // Multi-device Cloud Sync helper routes (stateless market, history, AI study & WhatsApp relay)
+  app.post('/api/market/snapshots', async (req, res) => {
+    try {
+      const assets = Array.isArray(req.body?.assets) ? (req.body.assets as WatchlistAsset[]) : [];
+      const forceRefresh = Boolean(req.body?.forceRefresh);
+      const [snapshots, usdBrlRate] = await Promise.all([
+        fetchMarketSnapshots(assets, forceRefresh),
+        getUsdBrlRate(),
+      ]);
+      res.json({ snapshots, usdBrlRate });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao buscar cotações ao vivo.' });
+    }
+  });
+
+  app.post('/api/portfolio/history', async (req, res) => {
+    try {
+      const rangeParam = String(req.body?.range || '7d');
+      const range: '24h' | '7d' | '30d' | '90d' | 'all' =
+        rangeParam === '24h' ||
+        rangeParam === '30d' ||
+        rangeParam === '90d' ||
+        rangeParam === 'all'
+          ? rangeParam
+          : '7d';
+      const holdings = Array.isArray(req.body?.holdings)
+        ? (req.body.holdings as PortfolioHolding[]).filter((h) => h.quantity > 0)
+        : [];
+      const totalCostBasisUsd = Number(req.body?.totalCostBasisUsd) || 0;
+      const points = await getPortfolioHistorySeries(holdings, totalCostBasisUsd, range);
+      res.json({ range, points });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao calcular histórico da carteira.' });
+    }
+  });
+
+  app.post('/api/study/cloud-run', async (req, res) => {
+    try {
+      const {
+        assetsToStudy,
+        allTrackedAssets,
+        previousAnalyses,
+        recentAlerts,
+        portfolioSummary,
+        settings,
+        accuracyStats,
+        trigger,
+      } = req.body as {
+        assetsToStudy?: WatchlistAsset[];
+        allTrackedAssets?: WatchlistAsset[];
+        previousAnalyses?: Record<string, AIAnalysisResult>;
+        recentAlerts?: SignalAlert[];
+        portfolioSummary?: PortfolioSummary;
+        settings?: AppSettings;
+        accuracyStats?: {
+          totalEvaluated: number;
+          hits: number;
+          neutrals: number;
+          misses: number;
+          accuracyPct: number | null;
+        };
+        trigger?: 'automatico' | 'manual' | 'novo_ativo';
+      };
+
+      const targets = Array.isArray(assetsToStudy) ? assetsToStudy : [];
+      if (targets.length === 0) {
+        return res.status(400).json({ error: 'Nenhum ativo informado para estudo.' });
+      }
+      const snapshots = await fetchMarketSnapshots(
+        Array.isArray(allTrackedAssets) && allTrackedAssets.length > 0
+          ? allTrackedAssets
+          : targets,
+        true
+      );
+      const result = await runAutonomousStudyCycle(
+        targets,
+        snapshots,
+        trigger ?? 'manual',
+        (prog) => broadcastSSE('study_progress', prog),
+        {
+          previousAnalyses: previousAnalyses ?? {},
+          recentAlerts: recentAlerts ?? [],
+          portfolioSummary: portfolioSummary ?? {
+            name: 'MINHA CARTEIRA',
+            totalValueUsd: 0,
+            totalCostBasisUsd: 0,
+            allTimeProfitUsd: 0,
+            allTimeProfitPct: 0,
+            change24hUsd: 0,
+            change24hPct: 0,
+            holdings: [],
+            transactions: [],
+            bestPerformer: null,
+            worstPerformer: null,
+          },
+          settings: settings ?? getStore().settings,
+          accuracyStats: accuracyStats ?? {
+            totalEvaluated: 0,
+            hits: 0,
+            neutrals: 0,
+            misses: 0,
+            accuracyPct: null,
+          },
+        }
+      );
+
+      res.json({
+        cycle: result.cycle,
+        newAlerts: result.newAlerts,
+        returnedAnalysesList: result.returnedAnalysesList,
+        snapshots,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Falha ao executar estudo de IA.' });
+    }
+  });
+
+  app.post('/api/whatsapp/send', async (req, res) => {
+    try {
+      const store = getStore();
+      const bodyWa = (req.body?.whatsapp ?? {}) as Partial<WhatsAppSettings>;
+      const merged: WhatsAppSettings = {
+        ...DEFAULT_WHATSAPP_SETTINGS,
+        ...(store.settings.whatsapp ?? {}),
+        ...bodyWa,
+      };
+      const text = String(req.body?.text ?? '').trim();
+      if (!text) {
+        return res.status(400).json({ error: 'Texto da mensagem é obrigatório.' });
+      }
+      const result = await sendWhatsAppMessage(merged, text, req.body?.metadata);
+      if (!result.ok) {
+        return res.status(400).json({ error: result.error || 'Falha ao enviar WhatsApp.' });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao enviar WhatsApp.' });
+    }
+  });
+
+  app.post('/api/sync', (req, res) => {
+    try {
+      const store = getStore();
+      const body = req.body as Partial<{
+        watchlist: WatchlistAsset[];
+        priceTriggers: PriceTrigger[];
+        settings: AppSettings;
+        clientActiveMs: number;
+      }>;
+      if (Array.isArray(body.watchlist)) store.watchlist = body.watchlist;
+      if (Array.isArray(body.priceTriggers)) store.priceTriggers = body.priceTriggers;
+      if (body.settings) {
+        store.settings = {
+          ...store.settings,
+          ...body.settings,
+          whatsapp: {
+            ...DEFAULT_WHATSAPP_SETTINGS,
+            ...(body.settings.whatsapp ?? {}),
+          },
+        };
+      }
+      if (typeof body.clientActiveMs === 'number' && body.clientActiveMs > 0) {
+        clientCloudActiveUntil = Date.now() + body.clientActiveMs;
+      }
+      saveStore();
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Falha ao sincronizar fundo 24h.' });
     }
   });
 
