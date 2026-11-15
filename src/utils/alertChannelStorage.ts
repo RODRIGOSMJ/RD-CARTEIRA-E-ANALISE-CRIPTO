@@ -9,6 +9,9 @@ export interface PythonGeneratorPrefs {
   intervalMinutes: PythonIntervalMinutes;
   includePortfolioAlerts: boolean;
   portfolioSwingPct: number;
+  enableDailyNewsSummary: boolean;
+  dailySummaryHourBrt: number;
+  useGeminiSummary: boolean;
 }
 
 export interface AlertChannelLocalCache {
@@ -34,6 +37,9 @@ const DEFAULT_CACHE: AlertChannelLocalCache = {
     intervalMinutes: 5,
     includePortfolioAlerts: true,
     portfolioSwingPct: 5,
+    enableDailyNewsSummary: true,
+    dailySummaryHourBrt: 8,
+    useGeminiSummary: true,
   },
 };
 
@@ -47,6 +53,7 @@ export function loadAlertChannelCache(): AlertChannelLocalCache {
     const validInterval: PythonIntervalMinutes =
       interval === 10 || interval === 15 || interval === 30 ? interval : 5;
     const swing = Number(parsed?.pythonGen?.portfolioSwingPct);
+    const summaryHour = Number(parsed?.pythonGen?.dailySummaryHourBrt);
     return {
       preferredChannel:
         parsed?.preferredChannel === 'whatsapp' ? 'whatsapp' : 'telegram',
@@ -72,6 +79,18 @@ export function loadAlertChannelCache(): AlertChannelLocalCache {
             : true,
         portfolioSwingPct:
           Number.isFinite(swing) && swing >= 1 && swing <= 50 ? swing : 5,
+        enableDailyNewsSummary:
+          typeof parsed?.pythonGen?.enableDailyNewsSummary === 'boolean'
+            ? parsed.pythonGen.enableDailyNewsSummary
+            : true,
+        dailySummaryHourBrt:
+          Number.isFinite(summaryHour) && summaryHour >= 0 && summaryHour <= 23
+            ? Math.floor(summaryHour)
+            : 8,
+        useGeminiSummary:
+          typeof parsed?.pythonGen?.useGeminiSummary === 'boolean'
+            ? parsed.pythonGen.useGeminiSummary
+            : true,
       },
     };
   } catch {

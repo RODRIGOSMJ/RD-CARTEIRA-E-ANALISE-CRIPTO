@@ -456,57 +456,129 @@ export function GitHubActionsPythonPanel({
       )}
 
       {/* Generator options */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-200 dark:border-white/[0.07]">
-        <div>
-          <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1.5">
-            Credenciais no script Python
-          </label>
-          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
-            <button
-              type="button"
-              onClick={() => updatePythonPref('credentialMode', 'secrets')}
-              className={`py-1.5 px-2 text-[11px] font-medium rounded-md transition-colors truncate ${
-                pythonPrefs.credentialMode === 'secrets'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              GitHub Secrets
-            </button>
-            <button
-              type="button"
-              onClick={() => updatePythonPref('credentialMode', 'inline')}
-              className={`py-1.5 px-2 text-[11px] font-medium rounded-md transition-colors truncate ${
-                pythonPrefs.credentialMode === 'inline'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              Direto no código
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1.5">
-            Frequência no GitHub Actions
-          </label>
-          <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
-            {([5, 10, 15, 30] as PythonIntervalMinutes[]).map((mins) => (
+      <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-white/[0.07]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1.5">
+              Credenciais no script Python
+            </label>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
               <button
-                key={mins}
                 type="button"
-                onClick={() => updatePythonPref('intervalMinutes', mins)}
-                className={`py-1.5 text-[11px] font-mono font-medium rounded-md transition-colors ${
-                  pythonPrefs.intervalMinutes === mins
+                onClick={() => updatePythonPref('credentialMode', 'secrets')}
+                className={`py-1.5 px-2 text-[11px] font-medium rounded-md transition-colors truncate ${
+                  pythonPrefs.credentialMode === 'secrets'
                     ? 'bg-sky-600 text-white'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
-                {mins}m
+                GitHub Secrets
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => updatePythonPref('credentialMode', 'inline')}
+                className={`py-1.5 px-2 text-[11px] font-medium rounded-md transition-colors truncate ${
+                  pythonPrefs.credentialMode === 'inline'
+                    ? 'bg-sky-600 text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                Direto no código
+              </button>
+            </div>
           </div>
+
+          <div>
+            <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1.5">
+              Frequência no GitHub Actions
+            </label>
+            <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
+              {([5, 10, 15, 30] as PythonIntervalMinutes[]).map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => updatePythonPref('intervalMinutes', mins)}
+                  className={`py-1.5 text-[11px] font-mono font-medium rounded-md transition-colors ${
+                    pythonPrefs.intervalMinutes === mins
+                      ? 'bg-sky-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {mins}m
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Morning Summary & Crypto News controls */}
+        <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] p-3 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                Resumo Diário da Manhã + Notícias &amp; Fear &amp; Greed
+              </span>
+              <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                Envia boletim diário em Markdown com sentimento, macro e notícias de impacto.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                updatePythonPref(
+                  'enableDailyNewsSummary',
+                  !pythonPrefs.enableDailyNewsSummary
+                )
+              }
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-colors whitespace-nowrap ${
+                pythonPrefs.enableDailyNewsSummary
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                  : 'border-slate-300 bg-white text-slate-600 dark:border-white/10 dark:bg-[#111827] dark:text-slate-400'
+              }`}
+            >
+              {pythonPrefs.enableDailyNewsSummary ? 'Ativado' : 'Desativado'}
+            </button>
+          </div>
+
+          {pythonPrefs.enableDailyNewsSummary && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-slate-200/80 dark:border-white/[0.06]">
+              <div>
+                <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">
+                  Horário do Resumo (Brasília)
+                </label>
+                <div className="grid grid-cols-4 gap-1 rounded-md bg-white dark:bg-[#111827] p-1 border border-slate-200 dark:border-white/[0.07]">
+                  {[7, 8, 9, 12].map((hr) => (
+                    <button
+                      key={hr}
+                      type="button"
+                      onClick={() => updatePythonPref('dailySummaryHourBrt', hr)}
+                      className={`py-1 text-[11px] font-mono font-medium rounded transition-colors ${
+                        pythonPrefs.dailySummaryHourBrt === hr
+                          ? 'bg-sky-600 text-white'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {String(hr).padStart(2, '0')}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer select-none py-1.5">
+                  <input
+                    type="checkbox"
+                    checked={pythonPrefs.useGeminiSummary}
+                    onChange={(e) =>
+                      updatePythonPref('useGeminiSummary', e.target.checked)
+                    }
+                    className="rounded border-slate-300 dark:border-white/20 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span>Gerar síntese executiva com Gemini (se GEMINI_API_KEY estiver configurada)</span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -577,7 +649,7 @@ export function GitHubActionsPythonPanel({
           </p>
           {pythonPrefs.credentialMode === 'secrets' && channel === 'telegram' && (
             <p>
-              2. Em <strong>Settings → Secrets and variables → Actions</strong>, crie os secrets <span className="font-mono text-slate-900 dark:text-slate-100">TELEGRAM_BOT_TOKEN</span> e <span className="font-mono text-slate-900 dark:text-slate-100">TELEGRAM_CHAT_ID</span>.
+              2. Em <strong>Settings → Secrets and variables → Actions</strong>, crie os secrets <span className="font-mono text-slate-900 dark:text-slate-100">TELEGRAM_BOT_TOKEN</span>, <span className="font-mono text-slate-900 dark:text-slate-100">TELEGRAM_CHAT_ID</span>{pythonPrefs.useGeminiSummary ? <> e (opcional) <span className="font-mono text-slate-900 dark:text-slate-100">GEMINI_API_KEY</span></> : null}.
             </p>
           )}
           {pythonPrefs.credentialMode === 'inline' && (

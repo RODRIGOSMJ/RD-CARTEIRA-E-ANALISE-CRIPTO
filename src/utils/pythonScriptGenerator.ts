@@ -145,44 +145,58 @@ export function generateMonitorPythonScript(input: PythonGeneratorInput): string
     ? `os.environ.get("WHATSAPP_WEBHOOK_URL") or "${waWebhookLiteral}"`
     : 'os.environ.get("WHATSAPP_WEBHOOK_URL", "").strip()';
 
+  const dailyHourBrt = Math.min(23, Math.max(0, Math.floor(prefs.dailySummaryHourBrt ?? 8)));
+  const intervalMin = Number(prefs.intervalMinutes || 5);
+
   return `#!/usr/bin/env python3
 """
-RG Crypto AI Copilot — Monitor 24/7 (GitHub Actions)
-Verifica cotações na Binance (com fallback automático na CoinGecko),
-avalia gatilhos 24h e variações da carteira, e envia alertas instantâneos
-via API oficial do Telegram (sendMessage) ou WhatsApp.
+RG Crypto AI Copilot — Monitor 24/7 + Resumo Diário & Notícias (GitHub Actions)
+- Vertente 1: Alertas em tempo real (gatilhos 24h + oscilações da carteira)
+- Vertente 2: Resumo Diário da Manhã com Índice Fear & Greed, macro global,
+  notícias de impacto e análise executiva via Gemini API (com fallback automático).
+- Envio formatado em Markdown limpo via API oficial do Telegram (sendMessage)
+  ou WhatsApp.
 """
 
-import html
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus
 
 import requests
 
 # ---------------------------------------------------------------------------
-# Configuração do Canal & Credenciais
+# Configuração do Canal, Horários & Credenciais
 # ---------------------------------------------------------------------------
 ALERT_CHANNEL = "${channel}"  # "telegram" ou "whatsapp"
 DISPLAY_CURRENCY = "${settings.currency}"  # "BRL" ou "USD"
 INCLUDE_PORTFOLIO_SWING_ALERTS = ${prefs.includePortfolioAlerts ? 'True' : 'False'}
 PORTFOLIO_SWING_THRESHOLD_PCT = ${Number(prefs.portfolioSwingPct || 5)}
 
+# Configuração do Resumo Diário da Manhã & Notícias
+ENABLE_DAILY_NEWS_SUMMARY = ${prefs.enableDailyNewsSummary ? 'True' : 'False'}
+DAILY_SUMMARY_HOUR_BRT = ${dailyHourBrt}  # Horário de Brasília (UTC-3), ex: 8 = 08:00
+CHECK_INTERVAL_MINUTES = ${intervalMin}
+USE_GEMINI_DAILY_SUMMARY = ${prefs.useGeminiSummary ? 'True' : 'False'}
+FORCE_DAILY_SUMMARY = os.environ.get("FORCE_DAILY_SUMMARY", "").strip().lower() in ("1", "true", "yes", "sim")
+STATE_FILE = ".rg_crypto_bot_state.json"
+
 TELEGRAM_BOT_TOKEN = ${tokenExpr}
 TELEGRAM_CHAT_ID = ${chatIdExpr}
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 
 WHATSAPP_PHONE = ${waPhoneExpr}
 CALLMEBOT_API_KEY = ${waKeyExpr}
 WHATSAPP_WEBHOOK_URL = ${waWebhookExpr}
 
-HTTP_TIMEOUT = 12
+HTTP_TIMEOUT = 14
 HEADERS = {
-    "User-Agent": "RGCryptoAICopilot/1.0 (GitHubActions-Monitor)",
+    "User-Agent": "RGCryptoAICopilot/2.0 (GitHubActions-Monitor)",
     "Accept": "application/json",
 }
+BRT_TZ = timezone(timedelta(hours=-3))
 
 # ---------------------------------------------------------------------------
 # Ativos da Carteira / Monitoramento & Gatilhos 24h exportados do aplicativo
@@ -190,6 +204,33 @@ HEADERS = {
 WATCHED_ASSETS: List[Dict[str, Any]] = json.loads(r"""${assetsJson}""")
 
 ACTIVE_TRIGGERS: List[Dict[str, Any]] = json.loads(r"""${triggersJson}""")
+
+
+def escape_md(text: Any) -> str:
+    """Escapa caracteres especiais do Markdown clássico do Telegram."""
+    s = str(text or "")
+    for ch in ("_", "*", "\`", "["):
+        s = s.replace(ch, f"\\\\{ch}")
+    return s
+
+
+def load_bot_state() -> Dict[str, Any]:
+    if not os.path.exists(STATE_FILE):
+        return {}
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_bot_state(state: Dict[str, Any]) -> None:
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        print(json.dumps({"ok": False, "step": "save_state", "error": str(exc)}), file=sys.stderr)
 
 
 def fetch_usd_brl_rate() -> float:
@@ -255,8 +296,155 @@ def fetch_coingecko_prices(coin_ids: List[str]) -> Dict[str, Tuple[float, float]
                 if price > 0:
                     results[cid] = (price, change)
     except (requests.RequestException, ValueError, TypeError) as exc:
-        print(f"[WARN] Falha ao consultar CoinGecko: {exc}", file=sys.stderr)
+        print(json.dumps({"ok": False, "source": "coingecko_prices", "error": str(exc)}), file=sys.stderr)
     return results
+
+
+def fetch_fear_and_greed() -> Dict[str, Any]:
+    """Consulta o Índice Fear & Greed (Alternative.me) para medir o sentimento global."""
+    url = "https://api.alternative.me/fng/?limit=2"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT)
+        resp.raise_for_status()
+        payload = resp.json()
+        items = payload.get("data") or []
+        if items:
+            current = items[0]
+            prev = items[1] if len(items) > 1 else current
+            value = int(current.get("value", 50))
+            prev_value = int(prev.get("value", value))
+            raw_class = str(current.get("value_classification", "Neutral"))
+            pt_map = {
+                "Extreme Fear": "Medo Extremo",
+                "Fear": "Medo",
+                "Neutral": "Neutro",
+                "Greed": "Ganância",
+                "Extreme Greed": "Ganância Extrema",
+            }
+            return {
+                "value": value,
+                "delta": value - prev_value,
+                "classification": pt_map.get(raw_class, raw_class),
+            }
+    except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
+        print(json.dumps({"ok": False, "source": "fear_and_greed", "error": str(exc)}), file=sys.stderr)
+    return {"value": 50, "delta": 0, "classification": "Neutro (indisponível)"}
+
+
+def fetch_global_macro_pulse() -> Dict[str, Any]:
+    """Consulta dominância do BTC e variação do Market Cap global na CoinGecko."""
+    url = "https://api.coingecko.com/api/v3/global"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT)
+        resp.raise_for_status()
+        data = (resp.json() or {}).get("data") or {}
+        mcap_change = float(data.get("market_cap_change_percentage_24h_usd") or 0.0)
+        btc_dom = float((data.get("market_cap_percentage") or {}).get("btc") or 0.0)
+        return {"market_cap_change_24h": mcap_change, "btc_dominance": btc_dom}
+    except (requests.RequestException, ValueError, TypeError, KeyError):
+        return {"market_cap_change_24h": 0.0, "btc_dominance": 0.0}
+
+
+def fetch_crypto_news(limit: int = 5) -> List[Dict[str, str]]:
+    """
+    Busca as principais notícias recentes do mercado cripto via CryptoCompare News API
+    (sem necessidade de chave), priorizando manchetes com impacto macro ou nos ativos.
+    """
+    url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=popular"
+    news_items: List[Dict[str, str]] = []
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT)
+        resp.raise_for_status()
+        payload = resp.json()
+        raw_list = payload.get("Data") if isinstance(payload, dict) else []
+        if not isinstance(raw_list, list):
+            return []
+
+        impact_keywords = (
+            "fed", "cpi", "inflation", "etf", "sec", "bitcoin", "btc",
+            "ethereum", "solana", "rate", "crash", "rally", "macro", "whale",
+        )
+        scored: List[Tuple[int, Dict[str, Any]]] = []
+        for idx, item in enumerate(raw_list[:25]):
+            title = str(item.get("title") or "").strip()
+            if not title:
+                continue
+            title_low = title.lower()
+            score = sum(2 for kw in impact_keywords if kw in title_low)
+            scored.append((score * 100 - idx, item))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        for _, item in scored[:limit]:
+            news_items.append(
+                {
+                    "title": str(item.get("title") or "").strip(),
+                    "source": str(item.get("source_info", {}).get("name") or item.get("source") or "CryptoNews"),
+                    "url": str(item.get("url") or "").strip(),
+                    "categories": str(item.get("categories") or "").strip(),
+                }
+            )
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        print(json.dumps({"ok": False, "source": "cryptocompare_news", "error": str(exc)}), file=sys.stderr)
+    return news_items
+
+
+def generate_gemini_executive_summary(
+    prices: Dict[str, Tuple[float, float, str]],
+    usd_brl: float,
+    fng: Dict[str, Any],
+    macro: Dict[str, Any],
+    news_items: List[Dict[str, str]],
+) -> Optional[str]:
+    """
+    Usa a API do Gemini para gerar um resumo executivo diário em português,
+    unindo cotações, Índice Fear & Greed, macroeconomia e notícias.
+    """
+    if not USE_GEMINI_DAILY_SUMMARY or not GEMINI_API_KEY:
+        return None
+
+    quotes_summary = []
+    for asset in WATCHED_ASSETS[:10]:
+        cid = asset["coin_id"]
+        if cid in prices:
+            p_usd, chg_24h, _ = prices[cid]
+            quotes_summary.append(f"{asset['symbol']}: {format_currency(p_usd, usd_brl)} ({chg_24h:+.2f}% 24h)")
+
+    headlines = [f"- {n['title']} ({n['source']})" for n in news_items[:5]]
+    prompt = (
+        "Você é o analista chefe do RG Crypto AI Copilot (foco em proteção de patrimônio e HODL).\\n"
+        "Escreva um Resumo Executivo Diário curto (máximo 4 tópicos objetivos em português) "
+        "com base nos dados reais abaixo. Não use hashtags e nunca recomende vender no prejuízo.\\n\\n"
+        f"Fear & Greed Index: {fng['value']}/100 ({fng['classification']}, delta {fng['delta']:+d})\\n"
+        f"Market Cap Global 24h: {macro['market_cap_change_24h']:+.2f}% | Dominância BTC: {macro['btc_dominance']:.1f}%\\n"
+        f"Cotações da Carteira: {', '.join(quotes_summary)}\\n"
+        f"Principais Notícias:\\n{chr(10).join(headlines)}\\n\\n"
+        "Entregue apenas os 4 tópicos iniciando cada linha com '• '."
+    )
+
+    endpoint = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    )
+    try:
+        resp = requests.post(
+            endpoint,
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.35, "maxOutputTokens": 450},
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        candidates = data.get("candidates") or []
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts") or []
+            text = "".join(str(p.get("text") or "") for p in parts).strip()
+            if text:
+                return text
+    except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
+        print(json.dumps({"ok": False, "source": "gemini_summary", "error": str(exc)}), file=sys.stderr)
+    return None
 
 
 def format_currency(price_usd: float, usd_brl: float) -> str:
@@ -269,8 +457,8 @@ def format_currency(price_usd: float, usd_brl: float) -> str:
     return f"{prefix} {val:.6f}".replace(".", ",")
 
 
-def send_telegram_message(html_message: str) -> bool:
-    """Envia mensagem formatada usando o endpoint oficial sendMessage do Telegram."""
+def send_telegram_message(markdown_message: str) -> bool:
+    """Envia mensagem organizada em Markdown usando o endpoint oficial sendMessage do Telegram."""
     token = TELEGRAM_BOT_TOKEN.strip()
     chat_id = TELEGRAM_CHAT_ID.strip()
     if not token or not chat_id:
@@ -290,8 +478,8 @@ def send_telegram_message(html_message: str) -> bool:
     endpoint = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": html_message,
-        "parse_mode": "HTML",
+        "text": markdown_message[:4090],
+        "parse_mode": "Markdown",
         "disable_web_page_preview": True,
     }
 
@@ -415,14 +603,149 @@ def evaluate_trigger(trigger: Dict[str, Any], price_usd: float) -> Tuple[bool, s
         if rise_pct >= target:
             return True, f"Alta de +{rise_pct:.2f}% (gatilho +{target:.2f}%)"
     elif cond == "abaixo_preco" and price_usd <= target:
-        return True, f"Preço atingiu ou ficou abaixo do alvo"
+        return True, "Preço atingiu ou ficou abaixo do alvo"
     elif cond == "acima_preco" and price_usd >= target:
-        return True, f"Preço atingiu ou superou o alvo"
+        return True, "Preço atingiu ou superou o alvo"
 
     return False, ""
 
 
+def should_send_daily_summary(now_brt: datetime, state: Dict[str, Any]) -> bool:
+    if not ENABLE_DAILY_NEWS_SUMMARY:
+        return False
+    if FORCE_DAILY_SUMMARY:
+        return True
+    today_key = now_brt.strftime("%Y-%m-%d")
+    if state.get("last_daily_summary_date") == today_key:
+        return False
+    # Dispara uma única vez na primeira janela do horário configurado (horário de Brasília)
+    window_minutes = max(CHECK_INTERVAL_MINUTES, 5)
+    return now_brt.hour == DAILY_SUMMARY_HOUR_BRT and now_brt.minute < window_minutes
+
+
+def build_daily_summary_messages(
+    prices: Dict[str, Tuple[float, float, str]],
+    usd_brl: float,
+    now_brt: datetime,
+) -> Tuple[str, str]:
+    """Monta a mensagem 'Resumo Diário da Manhã' em Markdown (Telegram) e texto (WhatsApp)."""
+    fng = fetch_fear_and_greed()
+    macro = fetch_global_macro_pulse()
+    news_items = fetch_crypto_news(limit=5)
+    ai_exec = generate_gemini_executive_summary(prices, usd_brl, fng, macro, news_items)
+
+    date_label = now_brt.strftime("%d/%m/%Y %H:%M BRT")
+    fng_emoji = "🟢" if fng["value"] >= 60 else ("🔴" if fng["value"] <= 35 else "🟡")
+
+    # Tópicos de cotações da carteira
+    asset_bullets_md: List[str] = []
+    asset_bullets_plain: List[str] = []
+    for asset in WATCHED_ASSETS[:10]:
+        cid = asset["coin_id"]
+        if cid not in prices:
+            continue
+        p_usd, chg_24h, _ = prices[cid]
+        sym = asset["symbol"]
+        price_str = format_currency(p_usd, usd_brl)
+        qty = float(asset.get("quantity") or 0)
+        avg_cost = float(asset.get("avg_cost_usd") or 0)
+        pnl_part = ""
+        if qty > 0 and avg_cost > 0:
+            pnl_pct = ((p_usd - avg_cost) / avg_cost) * 100.0
+            pnl_part = f" | P&L: {pnl_pct:+.1f}%"
+        icon = "📈" if chg_24h >= 0 else "📉"
+        asset_bullets_md.append(
+            f"• {icon} *{escape_md(sym)}*: {escape_md(price_str)} (\`{chg_24h:+.2f}%\` 24h{escape_md(pnl_part)})"
+        )
+        asset_bullets_plain.append(f"• {sym}: {price_str} ({chg_24h:+.2f}% 24h{pnl_part})")
+
+    # Tópicos de notícias de impacto
+    news_bullets_md: List[str] = []
+    news_bullets_plain: List[str] = []
+    if news_items:
+        for item in news_items:
+            safe_title = escape_md(item["title"])
+            safe_src = escape_md(item["source"])
+            if item.get("url"):
+                safe_url = item["url"].replace(")", "%29")
+                news_bullets_md.append(f"• [{safe_title}]({safe_url}) — _{safe_src}_")
+            else:
+                news_bullets_md.append(f"• {safe_title} — _{safe_src}_")
+            news_bullets_plain.append(f"• {item['title']} ({item['source']})")
+    else:
+        news_bullets_md.append("• Sem manchetes críticas retornadas no momento.")
+        news_bullets_plain.append("• Sem manchetes críticas retornadas no momento.")
+
+    # Resumo executivo (Gemini ou fallback quantitativo)
+    if ai_exec:
+        exec_md = "\\n".join(escape_md(line) for line in ai_exec.splitlines() if line.strip())
+        exec_plain = ai_exec
+        exec_source_label = "Análise Executiva IA (Gemini)"
+    else:
+        mcap_chg = macro["market_cap_change_24h"]
+        mood_hint = (
+            "Sentimento de medo favorece acumulação gradual (Preço Médio) e proteção HODL."
+            if fng["value"] <= 40
+            else (
+                "Sentimento de ganância pede cautela com compras em topo e atenção a realizações parciais acima de RSI 70."
+                if fng["value"] >= 70
+                else "Mercado em equilíbrio/consolidação — manter disciplina na carteira e aguardar gatilhos."
+            )
+        )
+        exec_md = (
+            f"• *Pulso Macro 24h*: Market Cap global em \`{mcap_chg:+.2f}%\` | Dominância BTC em \`{macro['btc_dominance']:.1f}%\`\\n"
+            f"• *Leitura HODL*: {escape_md(mood_hint)}"
+        )
+        exec_plain = (
+            f"• Pulso Macro 24h: Market Cap {mcap_chg:+.2f}% | Dominância BTC {macro['btc_dominance']:.1f}%\\n"
+            f"• Leitura HODL: {mood_hint}"
+        )
+        exec_source_label = "Resumo Quantitativo de Mercado"
+
+    md_sections = [
+        f"☀️ *RG Crypto AI Copilot — Resumo Diário da Manhã*",
+        f"_{escape_md(date_label)}_",
+        "",
+        f"*1. Sentimento & Macro Global*",
+        f"• {fng_emoji} *Fear & Greed Index*: *{fng['value']}/100* — {escape_md(fng['classification'])} ({fng['delta']:+d} vs ontem)",
+        f"• 🌐 *Market Cap 24h*: \`{macro['market_cap_change_24h']:+.2f}%\` | *BTC Dom.*: \`{macro['btc_dominance']:.1f}%\`",
+        "",
+        f"*2. {escape_md(exec_source_label)}*",
+        exec_md,
+        "",
+        "*3. Radar da Sua Carteira*",
+        "\\n".join(asset_bullets_md) if asset_bullets_md else "• Nenhum ativo monitorado.",
+        "",
+        "*4. Principais Notícias de Impacto*",
+        "\\n".join(news_bullets_md),
+    ]
+
+    plain_sections = [
+        f"*RG Crypto AI Copilot — Resumo Diário da Manhã ({date_label})*",
+        f"Fear & Greed: {fng['value']}/100 ({fng['classification']})",
+        "",
+        exec_plain,
+        "",
+        "*Cotações:*",
+        "\\n".join(asset_bullets_plain),
+        "",
+        "*Principais Notícias:*",
+        "\\n".join(news_bullets_plain),
+    ]
+
+    return "\\n".join(md_sections), "\\n".join(plain_sections)
+
+
+def dispatch_message(md_text: str, plain_text: str) -> bool:
+    if ALERT_CHANNEL == "telegram":
+        return send_telegram_message(md_text)
+    return send_whatsapp_message(plain_text)
+
+
 def main() -> int:
+    now_brt = datetime.now(BRT_TZ)
+    now_utc = datetime.now(timezone.utc).strftime("%d/%m %H:%M UTC")
+    state = load_bot_state()
     usd_brl = fetch_usd_brl_rate()
     prices: Dict[str, Tuple[float, float, str]] = {}
 
@@ -441,10 +764,12 @@ def main() -> int:
         for cid, (p, chg) in cg_res.items():
             prices[cid] = (p, chg, "CoinGecko")
 
-    alert_lines_html: List[str] = []
+    alert_lines_md: List[str] = []
     alert_lines_plain: List[str] = []
 
-    # 1. Avalia todos os gatilhos 24h ativos
+    # -----------------------------------------------------------------------
+    # VERTENTE 1: Alertas de gatilho em tempo real e carteira
+    # -----------------------------------------------------------------------
     for trig in ACTIVE_TRIGGERS:
         cid = trig["coin_id"]
         if cid not in prices:
@@ -458,17 +783,16 @@ def main() -> int:
             formatted_price = format_currency(price_usd, usd_brl)
             note_suffix = f" | Nota: {note}" if note else ""
 
-            alert_lines_html.append(
-                f"• <b>{html.escape(sym)}</b> [{html.escape(hint)}] — "
-                f"<b>{html.escape(formatted_price)}</b> ({chg_24h:+.2f}% 24h)\\n"
-                f"  ↳ {html.escape(reason)} via {html.escape(source)}"
-                + (f"\\n  ↳ <i>{html.escape(note)}</i>" if note else "")
+            alert_lines_md.append(
+                f"• *{escape_md(sym)}* \\[{escape_md(hint)}\\] — "
+                f"*{escape_md(formatted_price)}* (\`{chg_24h:+.2f}%\` 24h)\\n"
+                f"  ↳ {escape_md(reason)} via _{escape_md(source)}_"
+                + (f"\\n  ↳ _{escape_md(note)}_" if note else "")
             )
             alert_lines_plain.append(
                 f"• {sym} [{hint}] — {formatted_price} ({chg_24h:+.2f}% 24h) | {reason}{note_suffix}"
             )
 
-    # 2. Monitora oscilações fortes nos ativos da carteira
     if INCLUDE_PORTFOLIO_SWING_ALERTS:
         for asset in WATCHED_ASSETS:
             cid = asset["coin_id"]
@@ -485,48 +809,59 @@ def main() -> int:
                     pnl_pct = ((price_usd - avg_cost) / avg_cost) * 100.0
                     pnl_text = f" | Carteira P&L: {pnl_pct:+.2f}%"
                 direction = "ALTA FORTE" if chg_24h > 0 else "QUEDA FORTE"
-                alert_lines_html.append(
-                    f"• <b>{html.escape(sym)}</b> ({direction} {chg_24h:+.2f}% 24h) — "
-                    f"<b>{html.escape(formatted_price)}</b>"
-                    f"{html.escape(pnl_text)} ({html.escape(source)})"
+                alert_lines_md.append(
+                    f"• *{escape_md(sym)}* ({direction} \`{chg_24h:+.2f}%\` 24h) — "
+                    f"*{escape_md(formatted_price)}*"
+                    f"{escape_md(pnl_text)} (_{escape_md(source)}_)"
                 )
                 alert_lines_plain.append(
                     f"• {sym} ({direction} {chg_24h:+.2f}% 24h) — {formatted_price}{pnl_text}"
                 )
 
-    now_utc = datetime.now(timezone.utc).strftime("%d/%m %H:%M UTC")
+    send_daily = should_send_daily_summary(now_brt, state)
     print(
         json.dumps(
             {
                 "ok": True,
                 "checked_assets": len(prices),
                 "active_triggers": len(ACTIVE_TRIGGERS),
-                "alerts_triggered": len(alert_lines_html),
+                "alerts_triggered": len(alert_lines_md),
+                "daily_summary_scheduled": send_daily,
                 "channel": ALERT_CHANNEL,
-                "timestamp": now_utc,
+                "timestamp_utc": now_utc,
+                "timestamp_brt": now_brt.strftime("%d/%m %H:%M BRT"),
             },
             ensure_ascii=False,
         )
     )
 
-    if not alert_lines_html:
-        return 0
+    overall_ok = True
 
-    if ALERT_CHANNEL == "telegram":
-        msg_html = (
-            "🚨 <b>RG Crypto AI Copilot — Alerta 24h</b>\\n"
-            f"<i>{html.escape(now_utc)}</i>\\n\\n"
-            + "\\n\\n".join(alert_lines_html)
+    if alert_lines_md:
+        msg_md = (
+            "🚨 *RG Crypto AI Copilot — Alerta em Tempo Real*\\n"
+            f"_{escape_md(now_utc)}_\\n\\n"
+            + "\\n\\n".join(alert_lines_md)
         )
-        ok = send_telegram_message(msg_html)
-        return 0 if ok else 1
+        msg_plain = (
+            f"*RG Crypto AI Copilot — Alerta 24h ({now_utc})*\\n\\n"
+            + "\\n\\n".join(alert_lines_plain)
+        )
+        if not dispatch_message(msg_md, msg_plain):
+            overall_ok = False
 
-    msg_plain = (
-        f"*RG Crypto AI Copilot — Alerta 24h ({now_utc})*\\n\\n"
-        + "\\n\\n".join(alert_lines_plain)
-    )
-    ok = send_whatsapp_message(msg_plain)
-    return 0 if ok else 1
+    # -----------------------------------------------------------------------
+    # VERTENTE 2: Resumo Diário da Manhã & Principais Notícias de Impacto
+    # -----------------------------------------------------------------------
+    if send_daily:
+        daily_md, daily_plain = build_daily_summary_messages(prices, usd_brl, now_brt)
+        if dispatch_message(daily_md, daily_plain):
+            state["last_daily_summary_date"] = now_brt.strftime("%Y-%m-%d")
+            save_bot_state(state)
+        else:
+            overall_ok = False
+
+    return 0 if overall_ok else 1
 
 
 if __name__ == "__main__":
@@ -539,7 +874,7 @@ export function generateGitHubWorkflowYaml(
   prefs: PythonGeneratorPrefs
 ): string {
   const cronExpr = `*/${prefs.intervalMinutes} * * * *`;
-  const envBlock =
+  const channelEnv =
     channel === 'telegram'
       ? `          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: \${{ secrets.TELEGRAM_CHAT_ID }}`
@@ -547,12 +882,25 @@ export function generateGitHubWorkflowYaml(
           CALLMEBOT_API_KEY: \${{ secrets.CALLMEBOT_API_KEY }}
           WHATSAPP_WEBHOOK_URL: \${{ secrets.WHATSAPP_WEBHOOK_URL }}`;
 
-  return `name: RG Crypto AI Copilot - Monitor 24h
+  const extraEnv = prefs.useGeminiSummary
+    ? `\n          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}`
+    : '';
+
+  return `name: RG Crypto AI Copilot - Monitor 24h & Resumo Diário
 
 on:
   schedule:
     - cron: '${cronExpr}'
   workflow_dispatch:
+    inputs:
+      force_daily_summary:
+        description: 'Enviar Resumo Diário da Manhã agora'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   monitor-cripto:
@@ -569,9 +917,10 @@ jobs:
       - name: Instalar dependências
         run: pip install requests
 
-      - name: Executar verificação de cotações e alertas 24h
+      - name: Executar monitor, notícias e alertas 24h
         env:
-${envBlock}
+${channelEnv}${extraEnv}
+          FORCE_DAILY_SUMMARY: \${{ github.event.inputs.force_daily_summary || 'false' }}
         run: python monitor_cripto.py
 `;
 }
