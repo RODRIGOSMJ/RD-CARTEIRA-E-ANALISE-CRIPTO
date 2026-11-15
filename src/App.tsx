@@ -28,6 +28,7 @@ import { AddTriggerModal } from './components/AddTriggerModal.tsx';
 import { AssetDetailPanel } from './components/AssetDetailPanel.tsx';
 import { AutomationSettingsPanel } from './components/AutomationSettingsPanel.tsx';
 import { CryptoLogo } from './components/CryptoLogo.tsx';
+import { GitHubActionsPythonPanel } from './components/GitHubActionsPythonPanel.tsx';
 import { MonitorView } from './components/MonitorView.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { PortfolioView } from './components/PortfolioView.tsx';
@@ -222,13 +223,14 @@ export default function App() {
   const [alertsSubTab, setAlertsSubTab] = useState<'triggers' | 'alerts'>(() =>
     getInitialStorageChoice(ALERTS_SUBTAB_STORAGE_KEY, ['triggers', 'alerts'], 'triggers')
   );
-  const [rightSettingsTab, setRightSettingsTab] = useState<'whatsapp' | 'telegram' | 'automacao'>(
-    () =>
-      getInitialStorageChoice(
-        RIGHT_SETTINGS_SUBTAB_STORAGE_KEY,
-        ['whatsapp', 'telegram', 'automacao'],
-        'whatsapp'
-      )
+  const [rightSettingsTab, setRightSettingsTab] = useState<
+    'whatsapp' | 'telegram' | 'automacao' | 'python24h'
+  >(() =>
+    getInitialStorageChoice(
+      RIGHT_SETTINGS_SUBTAB_STORAGE_KEY,
+      ['whatsapp', 'telegram', 'automacao', 'python24h'],
+      'telegram'
+    )
   );
   const [studyStatusMsg, setStudyStatusMsg] = useState<string | null>(null);
   const [liveBannerAlerts, setLiveBannerAlerts] = useState<SignalAlert[]>([]);
@@ -2881,6 +2883,14 @@ export default function App() {
                     soundEnabled={soundEnabled}
                     onToggleSound={() => setSoundEnabled((v) => !v)}
                     onUpdateSettings={handleUpdateSettings}
+                    onOpenPythonGenerator={() => {
+                      setActiveTab('alertas');
+                      setRightSettingsTab('python24h');
+                    }}
+                    onOpenWhatsAppConfig={() => {
+                      setActiveTab('alertas');
+                      setRightSettingsTab('whatsapp');
+                    }}
                   />
                 </div>
               </div>
@@ -2918,6 +2928,17 @@ export default function App() {
                   <div className="flex flex-wrap items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-200 dark:border-white/[0.08] shadow-xs dark:shadow-none">
                     <button
                       type="button"
+                      onClick={() => setRightSettingsTab('telegram')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        rightSettingsTab === 'telegram'
+                          ? 'bg-sky-600 text-white'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Configurar Telegram
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setRightSettingsTab('whatsapp')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         rightSettingsTab === 'whatsapp'
@@ -2929,14 +2950,14 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setRightSettingsTab('telegram')}
+                      onClick={() => setRightSettingsTab('python24h')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                        rightSettingsTab === 'telegram'
+                        rightSettingsTab === 'python24h'
                           ? 'bg-sky-600 text-white'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
-                      Configurar Telegram
+                      Script Python 24/7
                     </button>
                     <button
                       type="button"
@@ -3102,12 +3123,23 @@ export default function App() {
                         }
                         onUpdateSettings={handleUpdateSettings}
                       />
+                    ) : rightSettingsTab === 'python24h' ? (
+                      <GitHubActionsPythonPanel
+                        settings={state.settings}
+                        watchlist={state.watchlist}
+                        holdings={state.portfolio.holdings}
+                        triggers={state.triggers ?? []}
+                        onUpdateSettings={handleUpdateSettings}
+                        onSwitchChannelTab={(ch) => setRightSettingsTab(ch)}
+                      />
                     ) : (
                       <AutomationSettingsPanel
                         settings={state.settings}
                         soundEnabled={soundEnabled}
                         onToggleSound={() => setSoundEnabled((v) => !v)}
                         onUpdateSettings={handleUpdateSettings}
+                        onOpenPythonGenerator={() => setRightSettingsTab('python24h')}
+                        onOpenWhatsAppConfig={() => setRightSettingsTab('whatsapp')}
                       />
                     )}
                   </div>

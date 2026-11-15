@@ -1,20 +1,48 @@
-import { Bell, Check, Send, Volume2, VolumeX } from 'lucide-react';
+import {
+  Bell,
+  Check,
+  Eye,
+  EyeOff,
+  Loader2,
+  MessageSquare,
+  Send,
+  Terminal,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { apiTestWebhook } from '../services/apiClient.ts';
-import type { AppSettings } from '../types/crypto.ts';
+import { apiTestTelegram, apiTestWebhook } from '../services/apiClient.ts';
+import type { AppSettings, TelegramSettings } from '../types/crypto.ts';
+import {
+  loadAlertChannelCache,
+  savePreferredAlertChannel,
+  saveTelegramCache,
+  type AlertChannelChoice,
+} from '../utils/alertChannelStorage.ts';
 
 interface AutomationSettingsPanelProps {
   settings: AppSettings;
   soundEnabled: boolean;
   onToggleSound: () => void;
   onUpdateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  onOpenPythonGenerator?: () => void;
+  onOpenWhatsAppConfig?: () => void;
 }
+
+const DEFAULT_TG: TelegramSettings = {
+  enabled: false,
+  botToken: '',
+  chatId: '',
+  forwardAiSignals: true,
+};
 
 export function AutomationSettingsPanel({
   settings,
   soundEnabled,
   onToggleSound,
   onUpdateSettings,
+  onOpenPythonGenerator,
+  onOpenWhatsAppConfig,
 }: AutomationSettingsPanelProps) {
   const [webhookInput, setWebhookInput] = useState(settings.webhookUrl);
   const [savingWebhook, setSavingWebhook] = useState(false);
@@ -29,9 +57,113 @@ export function AutomationSettingsPanel({
       : 'unsupported'
   );
 
+  const [selectedChannel, setSelectedChannel] = useState<AlertChannelChoice>(
+    () => loadAlertChannelCache().preferredChannel
+  );
+  const [tgToken, setTgToken] = useState<string>(
+    () =>
+      settings.telegram?.botToken ||
+      loadAlertChannelCache().telegram.botToken ||
+      ''
+  );
+  const [tgChatId, setTgChatId] = useState<string>(
+    () =>
+      settings.telegram?.chatId ||
+      loadAlertChannelCache().telegram.chatId ||
+      ''
+  );
+  const [showTgToken, setShowTgToken] = useState(false);
+  const [savingChannel, setSavingChannel] = useState(false);
+  const [testingChannel, setTestingChannel] = useState(false);
+  const [channelStatus, setChannelStatus] = useState<{
+    type: 'ok' | 'err';
+    msg: string;
+  } | null>(null);
+
   useEffect(() => {
     setWebhookInput(settings.webhookUrl);
   }, [settings.webhookUrl]);
+
+  useEffect(() => {
+    if (settings.telegram?.botToken) {
+      setTgToken(settings.telegram.botToken);
+    }
+    if (settings.telegram?.chatId) {
+      setTgChatId(settings.telegram.chatId);
+    }
+  }, [settings.telegram?.botToken, settings.telegram?.chatId]);
+
+  function handleChannelSelect(ch: AlertChannelChoice) {
+    setSelectedChannel(ch);
+    savePreferredAlertChannel(ch);
+    setChannelStatus(null);
+  }
+
+  function handleTgTokenChange(val: string) {
+    setTgToken(val);
+    saveTelegramCache({ botToken: val.trim() });
+  }
+
+  function handleTgChatIdChange(val: string) {
+    setTgChatId(val);
+    saveTelegramCache({ chatId: val.trim() });
+  }
+
+  async function handleSaveTelegramQuick() {
+    setSavingChannel(true);
+    setChannelStatus(null);
+    try {
+      const nextTg: TelegramSettings = {
+        ...DEFAULT_TG,
+        ...(settings.telegram ?? {}),
+        botToken: tgToken.trim(),
+        chatId: tgChatId.trim(),
+        enabled: tgToken.trim().length > 0 && tgChatId.trim().length > 0,
+      };
+      saveTelegramCache(nextTg);
+      savePreferredAlertChannel('telegram');
+      await onUpdateSettings({ telegram: nextTg });
+      setChannelStatus({
+        type: 'ok',
+        msg: 'Telegram Bot Token e Chat ID salvos no localStorage e ativados.',
+      });
+    } catch (err: any) {
+      setChannelStatus({
+        type: 'err',
+        msg: err?.message || 'Erro ao salvar configuração do Telegram.',
+      });
+    } finally {
+      setSavingChannel(false);
+    }
+  }
+
+  async function handleTestTelegramQuick() {
+    setTestingChannel(true);
+    setChannelStatus(null);
+    try {
+      const nextTg: TelegramSettings = {
+        ...DEFAULT_TG,
+        ...(settings.telegram ?? {}),
+        botToken: tgToken.trim(),
+        chatId: tgChatId.trim(),
+        enabled: true,
+      };
+      saveTelegramCache(nextTg);
+      await onUpdateSettings({ telegram: nextTg });
+      await apiTestTelegram(nextTg);
+      setChannelStatus({
+        type: 'ok',
+        msg: 'Alerta de teste enviado no Telegram com sucesso!',
+      });
+    } catch (err: any) {
+      setChannelStatus({
+        type: 'err',
+        msg: err?.message || 'Erro ao enviar teste no Telegram.',
+      });
+    } finally {
+      setTestingChannel(false);
+    }
+  }
 
   async function requestNotificationPermission() {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -212,6 +344,157 @@ export function AutomationSettingsPanel({
           )}
           {soundEnabled ? 'Som de alerta ligado' : 'Som desligado'}
         </button>
+      </div>
+
+      {/* Alert Channel Selector: Telegram vs WhatsApp */}
+      <div className="pt-3 border-t border-slate-200 dark:border-white/[0.07] space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+            Canal de Alertas Automáticos
+          </label>
+          {onOpenPythonGenerator && (
+            <button
+              type="button"
+              onClick={onOpenPythonGenerator}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 dark:text-sky-400 hover:underline whitespace-nowrap"
+            >
+              <Terminal className="w-3 h-3" />
+              Gerador Python 24/7
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.07]">
+          <button
+            type="button"
+            onClick={() => handleChannelSelect('telegram')}
+            className={`inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+              selectedChannel === 'telegram'
+                ? 'bg-sky-600 text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Send className="w-3.5 h-3.5" />
+            Telegram
+          </button>
+          <button
+            type="button"
+            onClick={() => handleChannelSelect('whatsapp')}
+            className={`inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+              selectedChannel === 'whatsapp'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            WhatsApp
+          </button>
+        </div>
+
+        {selectedChannel === 'telegram' ? (
+          <div className="space-y-2.5 rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] p-3">
+            <div>
+              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">
+                Telegram Bot Token (@BotFather)
+              </label>
+              <div className="relative">
+                <input
+                  type={showTgToken ? 'text' : 'password'}
+                  value={tgToken}
+                  onChange={(e) => handleTgTokenChange(e.target.value)}
+                  placeholder="Ex: 7123456789:AAHxxxxxxxx..."
+                  className="w-full pl-3 pr-9 py-1.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowTgToken((v) => !v)}
+                  aria-label={showTgToken ? 'Ocultar token' : 'Mostrar token'}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-0.5"
+                >
+                  {showTgToken ? (
+                    <EyeOff className="w-3.5 h-3.5" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">
+                Telegram Chat ID
+              </label>
+              <input
+                type="text"
+                value={tgChatId}
+                onChange={(e) => handleTgChatIdChange(e.target.value)}
+                placeholder="Ex: 123456789"
+                className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => void handleSaveTelegramQuick()}
+                disabled={savingChannel}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50"
+              >
+                {savingChannel ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                {savingChannel ? 'Salvando...' : 'Salvar Telegram'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleTestTelegramQuick()}
+                disabled={testingChannel}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors disabled:opacity-50"
+              >
+                {testingChannel ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                Testar Telegram
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#0B0F17] p-3 text-xs flex items-center justify-between gap-2">
+            <div>
+              <p className="text-slate-700 dark:text-slate-300 font-medium">
+                WhatsApp: {settings.whatsapp.phoneNumber || 'Não configurado'}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {settings.whatsapp.enabled ? 'Envio 24h ativo' : 'Envio pausado'}
+              </p>
+            </div>
+            {onOpenWhatsAppConfig && (
+              <button
+                type="button"
+                onClick={onOpenWhatsAppConfig}
+                className="px-2.5 py-1.5 text-[11px] font-medium rounded-md border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 whitespace-nowrap"
+              >
+                Configurar WhatsApp
+              </button>
+            )}
+          </div>
+        )}
+
+        {channelStatus && (
+          <p
+            className={`text-xs ${
+              channelStatus.type === 'ok'
+                ? 'text-emerald-700 dark:text-emerald-400'
+                : 'text-rose-700 dark:text-rose-400'
+            }`}
+          >
+            {channelStatus.msg}
+          </p>
+        )}
       </div>
 
       {/* Optional Webhook Integration */}

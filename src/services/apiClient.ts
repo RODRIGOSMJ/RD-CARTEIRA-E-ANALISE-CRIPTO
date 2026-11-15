@@ -32,6 +32,11 @@ import {
   looksLikePhoneInsteadOfCallMeBotKey,
   normalizeWhatsAppPhone,
 } from '../utils/whatsappFormat.ts';
+import {
+  loadAlertChannelCache,
+  saveTelegramCache,
+  saveWhatsAppCache,
+} from '../utils/alertChannelStorage.ts';
 
 export class BackendUnavailableError extends Error {
   constructor(message = 'Servidor de API indisponível neste ambiente') {
@@ -1465,11 +1470,43 @@ async function withFallback<T>(
   }
 }
 
+function mergeSettingsWithLocalCache(settings: AppSettings): AppSettings {
+  const cache = loadAlertChannelCache();
+  const baseTelegram: TelegramSettings = {
+    ...DEFAULT_LOCAL_TELEGRAM,
+    ...(settings.telegram ?? {}),
+  };
+  const hydratedTelegram: TelegramSettings = {
+    ...baseTelegram,
+    botToken: baseTelegram.botToken || cache.telegram.botToken || '',
+    chatId: baseTelegram.chatId || cache.telegram.chatId || '',
+    enabled: baseTelegram.enabled || (Boolean(!baseTelegram.botToken && cache.telegram.enabled)),
+  };
+  const baseWa: WhatsAppSettings = {
+    ...DEFAULT_LOCAL_WHATSAPP,
+    ...(settings.whatsapp ?? {}),
+  };
+  const hydratedWa: WhatsAppSettings = {
+    ...baseWa,
+    phoneNumber: baseWa.phoneNumber || cache.whatsapp.phoneNumber || '',
+    callMeBotApiKey: baseWa.callMeBotApiKey || cache.whatsapp.callMeBotApiKey || '',
+  };
+  return {
+    ...settings,
+    telegram: hydratedTelegram,
+    whatsapp: hydratedWa,
+  };
+}
+
 export async function apiGetState(forceRefresh = false): Promise<AppStatePayload> {
-  return withFallback(
+  const payload = await withFallback(
     () => safeFetchJson<AppStatePayload>(`/api/state${forceRefresh ? '?refresh=1' : ''}`),
     () => buildLocalStatePayload(forceRefresh)
   );
+  return {
+    ...payload,
+    settings: mergeSettingsWithLocalCache(payload.settings),
+  };
 }
 
 export async function apiFetchSnapshotsForAssets(
@@ -2118,8 +2155,36 @@ export async function apiRemoveWatchlist(coinId: string): Promise<AppStatePayloa
 export async function apiUpdateSettings(
   patch: Partial<AppSettings>
 ): Promise<AppStatePayload> {
+  if (patch.telegram) {
+    saveTelegramCache(patch.telegram);
+  }
+  if (patch.whatsapp) {
+    saveWhatsAppCache(patch.whatsapp);
+  }
+
+  // Always mirror settings locally so credentials persist in browser localStorage
+  const mirrorLocal = () => {
+    const store = loadLocalStore();
+    store.settings = {
+      ...store.settings,
+      ...patch,
+      whatsapp: patch.whatsapp
+        ? { ...store.settings.whatsapp, ...patch.whatsapp }
+        : store.settings.whatsapp,
+      telegram: patch.telegram
+        ? {
+            ...(store.settings.telegram ?? DEFAULT_LOCAL_TELEGRAM),
+            ...patch.telegram,
+          }
+        : store.settings.telegram ?? DEFAULT_LOCAL_TELEGRAM,
+    };
+    saveLocalStore(store);
+    return store.settings;
+  };
+
   return withFallback(
     async () => {
+      mirrorLocal();
       const res = await safeFetchJson<{ state: AppStatePayload }>('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2128,22 +2193,8 @@ export async function apiUpdateSettings(
       return res.state;
     },
     async () => {
-      const store = loadLocalStore();
-      store.settings = {
-        ...store.settings,
-        ...patch,
-        whatsapp: patch.whatsapp
-          ? { ...store.settings.whatsapp, ...patch.whatsapp }
-          : store.settings.whatsapp,
-        telegram: patch.telegram
-          ? {
-              ...(store.settings.telegram ?? DEFAULT_LOCAL_TELEGRAM),
-              ...patch.telegram,
-            }
-          : store.settings.telegram ?? DEFAULT_LOCAL_TELEGRAM,
-      };
-      saveLocalStore(store);
-      ensureLocalNextStudyAt(store.settings, true);
+      const updatedSettings = mirrorLocal();
+      ensureLocalNextStudyAt(updatedSettings, true);
       return buildLocalStatePayload(false);
     }
   );

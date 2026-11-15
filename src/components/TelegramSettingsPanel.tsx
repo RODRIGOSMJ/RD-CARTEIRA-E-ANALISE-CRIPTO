@@ -10,6 +10,11 @@ import {
 import { useEffect, useState } from 'react';
 import { apiDetectTelegramChatId, apiTestTelegram } from '../services/apiClient.ts';
 import type { AppSettings, TelegramSettings } from '../types/crypto.ts';
+import {
+  loadAlertChannelCache,
+  savePreferredAlertChannel,
+  saveTelegramCache,
+} from '../utils/alertChannelStorage.ts';
 
 interface TelegramSettingsPanelProps {
   telegram: TelegramSettings;
@@ -35,9 +40,14 @@ export function TelegramSettingsPanel({
   telegram,
   onUpdateSettings,
 }: TelegramSettingsPanelProps) {
-  const [draft, setDraft] = useState<TelegramSettings>({
-    ...DEFAULT_TELEGRAM_DRAFT,
-    ...telegram,
+  const [draft, setDraft] = useState<TelegramSettings>(() => {
+    const cached = loadAlertChannelCache().telegram;
+    return {
+      ...DEFAULT_TELEGRAM_DRAFT,
+      ...telegram,
+      botToken: telegram.botToken || cached.botToken || '',
+      chatId: telegram.chatId || cached.chatId || '',
+    };
   });
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,17 +59,24 @@ export function TelegramSettingsPanel({
   } | null>(null);
 
   useEffect(() => {
-    setDraft({
+    const cached = loadAlertChannelCache().telegram;
+    setDraft((prev) => ({
       ...DEFAULT_TELEGRAM_DRAFT,
       ...telegram,
-    });
+      botToken: telegram.botToken || prev.botToken || cached.botToken || '',
+      chatId: telegram.chatId || prev.chatId || cached.chatId || '',
+    }));
   }, [telegram]);
 
   const setField = <K extends keyof TelegramSettings>(
     key: K,
     val: TelegramSettings[K]
   ) => {
-    setDraft((prev) => ({ ...prev, [key]: val }));
+    setDraft((prev) => {
+      const next = { ...prev, [key]: val };
+      saveTelegramCache(next);
+      return next;
+    });
   };
 
   function prepareCleaned(autoActivateIfReady: boolean): TelegramSettings {
@@ -81,6 +98,8 @@ export function TelegramSettingsPanel({
     try {
       const prepared = prepareCleaned(true);
       setDraft(prepared);
+      saveTelegramCache(prepared);
+      savePreferredAlertChannel('telegram');
       await onUpdateSettings({ telegram: prepared });
       setStatusMsg({
         type: 'ok',
@@ -225,7 +244,7 @@ export function TelegramSettingsPanel({
       {/* Bot Token */}
       <div>
         <label className="block text-xs text-slate-700 dark:text-slate-400 mb-1.5">
-          Bot Token do Telegram (@BotFather)
+          Telegram Bot Token (@BotFather)
         </label>
         <div className="relative">
           <input
@@ -251,7 +270,7 @@ export function TelegramSettingsPanel({
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <label className="block text-xs text-slate-700 dark:text-slate-400">
-            Chat ID de destino (seu usuário, grupo ou canal)
+            Telegram Chat ID (seu usuário, grupo ou canal)
           </label>
           <button
             type="button"

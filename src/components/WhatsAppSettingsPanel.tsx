@@ -10,6 +10,11 @@ import {
   looksLikePhoneInsteadOfCallMeBotKey,
   normalizeWhatsAppPhone,
 } from '../utils/whatsappFormat.ts';
+import {
+  loadAlertChannelCache,
+  savePreferredAlertChannel,
+  saveWhatsAppCache,
+} from '../utils/alertChannelStorage.ts';
 
 interface WhatsAppSettingsPanelProps {
   whatsapp: WhatsAppSettings;
@@ -46,7 +51,14 @@ export function WhatsAppSettingsPanel({
   whatsapp,
   onUpdateSettings,
 }: WhatsAppSettingsPanelProps) {
-  const [draft, setDraft] = useState<WhatsAppSettings>(whatsapp);
+  const [draft, setDraft] = useState<WhatsAppSettings>(() => {
+    const cached = loadAlertChannelCache().whatsapp;
+    return {
+      ...whatsapp,
+      phoneNumber: whatsapp.phoneNumber || cached.phoneNumber || '',
+      callMeBotApiKey: whatsapp.callMeBotApiKey || cached.callMeBotApiKey || '',
+    };
+  });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{
@@ -55,7 +67,13 @@ export function WhatsAppSettingsPanel({
   } | null>(null);
 
   useEffect(() => {
-    setDraft(whatsapp);
+    const cached = loadAlertChannelCache().whatsapp;
+    setDraft((prev) => ({
+      ...whatsapp,
+      phoneNumber: whatsapp.phoneNumber || prev.phoneNumber || cached.phoneNumber || '',
+      callMeBotApiKey:
+        whatsapp.callMeBotApiKey || prev.callMeBotApiKey || cached.callMeBotApiKey || '',
+    }));
   }, [whatsapp]);
 
   const normalizedPhone = useMemo(
@@ -74,7 +92,11 @@ export function WhatsAppSettingsPanel({
     key: K,
     val: WhatsAppSettings[K]
   ) => {
-    setDraft((prev) => ({ ...prev, [key]: val }));
+    setDraft((prev) => {
+      const next = { ...prev, [key]: val };
+      saveWhatsAppCache(next);
+      return next;
+    });
   };
 
   function prepareNormalizedDraft(autoActivateIfReady: boolean): WhatsAppSettings {
@@ -102,6 +124,8 @@ export function WhatsAppSettingsPanel({
     try {
       const prepared = prepareNormalizedDraft(true);
       setDraft(prepared);
+      saveWhatsAppCache(prepared);
+      savePreferredAlertChannel('whatsapp');
       await onUpdateSettings({ whatsapp: prepared });
       setStatusMsg({
         type: 'ok',
