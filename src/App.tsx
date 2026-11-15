@@ -9,7 +9,6 @@ import {
   Copy,
   ExternalLink,
   Loader2,
-  LogIn,
   LogOut,
   Plus,
   Search,
@@ -128,6 +127,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [cloudUser, setCloudUser] = useState<User | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [cloudData, setCloudData] = useState<CloudWorkspaceData | null>(null);
@@ -153,6 +153,7 @@ export default function App() {
   const [countdownLabel, setCountdownLabel] = useState<string>('');
   const [streamConnected, setStreamConnected] = useState(false);
 
+  const cloudMenuRef = useRef<HTMLDivElement | null>(null);
   const localStateRef = useRef<AppStatePayload | null>(null);
   const cloudDataRef = useRef<CloudWorkspaceData | null>(null);
   const cloudSnapshotsRef = useRef<Record<string, MarketSnapshot>>({});
@@ -222,6 +223,24 @@ export default function App() {
       usdBrlRef.current = state.usdBrlRate;
     }
   }, [state]);
+
+  useEffect(() => {
+    if (!cloudMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (cloudMenuRef.current && !cloudMenuRef.current.contains(event.target as Node)) {
+        setCloudMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCloudMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [cloudMenuOpen]);
 
   // Helper to collect union of watchlist, portfolio & trigger assets
   const buildTrackedAssetList = useCallback((workspace: CloudWorkspaceData): WatchlistAsset[] => {
@@ -671,6 +690,7 @@ export default function App() {
   ]);
 
   async function handleGoogleSignIn() {
+    setCloudMenuOpen(false);
     setAuthBusy(true);
     setError(null);
     setUnauthorizedDomain(null);
@@ -706,6 +726,7 @@ export default function App() {
   }
 
   async function handleGoogleSignOut() {
+    setCloudMenuOpen(false);
     setAuthBusy(true);
     try {
       await signOutCloud();
@@ -1392,8 +1413,83 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Zone 3: 1 primary CTA button */}
-          <div className="shrink-0">
+          {/* Zone 3: Tiny cloud sync icon + 1 primary CTA button */}
+          <div className="flex items-center gap-2 shrink-0">
+            {authReady && (
+              <div className="relative" ref={cloudMenuRef}>
+                <button
+                  type="button"
+                  disabled={authBusy}
+                  onClick={() => {
+                    if (cloudUser) {
+                      setCloudMenuOpen((prev) => !prev);
+                    } else {
+                      void handleGoogleSignIn();
+                    }
+                  }}
+                  title={
+                    cloudUser
+                      ? `Nuvem sincronizada (${cloudUser.email ?? 'Conta Google'})`
+                      : 'Sincronizar conta na nuvem'
+                  }
+                  aria-label={
+                    cloudUser
+                      ? `Nuvem sincronizada (${cloudUser.email ?? 'Conta Google'})`
+                      : 'Sincronizar conta na nuvem'
+                  }
+                  className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+                    cloudUser
+                      ? 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400'
+                      : 'border-white/10 bg-[#111827] hover:bg-slate-800 text-sky-400 hover:text-sky-300'
+                  }`}
+                >
+                  {authBusy ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : cloudUser ? (
+                    <CloudCheck className="w-4 h-4" />
+                  ) : (
+                    <Cloud className="w-4 h-4" />
+                  )}
+                </button>
+
+                {cloudUser && cloudMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 bg-[#111827] shadow-2xl p-3 space-y-2.5 z-50">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                        <CloudCheck className="w-3.5 h-3.5 shrink-0" />
+                        Nuvem sincronizada
+                      </p>
+                      {cloudUser.email && (
+                        <p className="text-[11px] font-mono text-slate-300 truncate">
+                          {cloudUser.email}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1 border-t border-white/[0.08]">
+                      <button
+                        type="button"
+                        disabled={authBusy}
+                        onClick={() => void handleGoogleSignIn()}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-200 transition-colors disabled:opacity-50"
+                      >
+                        <Cloud className="w-3 h-3 text-sky-400" />
+                        Trocar conta
+                      </button>
+                      <button
+                        type="button"
+                        disabled={authBusy}
+                        onClick={() => void handleGoogleSignOut()}
+                        className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border border-white/10 hover:bg-rose-500/15 hover:text-rose-300 text-slate-300 transition-colors disabled:opacity-50"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        Sair
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               type="button"
               disabled={
@@ -1555,141 +1651,78 @@ export default function App() {
           )}
         </div>
 
-        {/* Cross-Device Cloud Sync Strip (PC <-> Tablet <-> Celular) */}
-        {authReady && (
-          <section
-            className={`rounded-xl border px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${
-              cloudUser
-                ? 'border-emerald-500/20 bg-[#111827]'
-                : 'border-sky-500/25 bg-[#111827]'
-            }`}
-          >
-            {cloudUser ? (
-              <>
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                    <CloudCheck className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-100">
-                      <span>Sincronização em nuvem ativa</span>
-                      {cloudUser.email && (
-                        <span className="font-mono text-[11px] font-normal text-emerald-300 truncate">
-                          {cloudUser.email}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400">
-                      Carteira, ativos, gatilhos 24h e configurações são salvos em tempo real no seu computador, tablet e celular.
-                    </p>
-                  </div>
-                </div>
+        {/* Domain authorization helper (only shown if Firebase Auth rejects an unauthorized domain) */}
+        {authReady && !cloudUser && unauthorizedDomain !== null && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-4 space-y-2.5 text-xs">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1 min-w-0">
+                <p className="font-semibold text-amber-200">
+                  Autorize este domínio publicado no Firebase para liberar o login Google
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  Por segurança, o Firebase Authentication bloqueia o login em endereços novos até que você adicione o domínio no projeto{' '}
+                  <span className="font-mono text-amber-200">{firebaseProjectId}</span>.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={firebaseAuthDomainsSettingsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors whitespace-nowrap"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Abrir domínios autorizados
+                </a>
                 <button
                   type="button"
-                  disabled={authBusy}
-                  onClick={() => void handleGoogleSignOut()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 hover:bg-slate-800 text-slate-300 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+                  onClick={() => setUnauthorizedDomain(null)}
+                  className="p-1.5 text-amber-200/70 hover:text-amber-100 rounded-md"
+                  aria-label="Fechar aviso"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Sair da conta
+                  <X className="w-4 h-4" />
                 </button>
-              </>
-            ) : (
-              <div className="w-full space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
-                      <Cloud className="w-4 h-4 text-sky-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-100">
-                        Sincronize seus dados entre computador, tablet e celular
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        Entre com sua conta Google nos seus dispositivos para manter carteira, ativos e gatilhos do WhatsApp sempre iguais em todos eles.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={authBusy}
-                    onClick={() => void handleGoogleSignIn()}
-                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
-                  >
-                    {authBusy ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <LogIn className="w-3.5 h-3.5" />
-                    )}
-                    Entrar com Google
-                  </button>
-                </div>
+              </div>
+            </div>
 
-                {unauthorizedDomain !== null && (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-3.5 space-y-2.5 text-xs">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1 min-w-0">
-                        <p className="font-semibold text-amber-200">
-                          Autorize este domínio publicado no Firebase para liberar o login Google
-                        </p>
-                        <p className="text-[11px] text-slate-300">
-                          Por segurança, o Firebase Authentication bloqueia o login em endereços novos até que você adicione o domínio no projeto{' '}
-                          <span className="font-mono text-amber-200">{firebaseProjectId}</span>.
-                        </p>
-                      </div>
-                      <a
-                        href={firebaseAuthDomainsSettingsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors whitespace-nowrap shrink-0"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Abrir domínios autorizados
-                      </a>
-                    </div>
-
-                    {unauthorizedDomain && (
-                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-[#0B0F17] px-3 py-2">
-                        <span className="text-[11px] text-slate-400">Domínio detectado:</span>
-                        <code className="text-[11px] font-mono text-sky-300 break-all flex-1">
-                          {unauthorizedDomain}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => void handleCopyDomain()}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/10 bg-[#111827] hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
-                        >
-                          {copiedDomain ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              Copiado
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              Copiar domínio
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-
-                    <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
-                      <li>
-                        Clique em <strong className="text-slate-100">Abrir domínios autorizados</strong> e vá em{' '}
-                        <span className="font-mono text-slate-200">Authentication &gt; Settings &gt; Authorized domains</span>.
-                      </li>
-                      <li>
-                        Clique em <strong className="text-slate-100">Add domain</strong> e cole o domínio copiado acima.
-                      </li>
-                      <li>
-                        Volte aqui e clique novamente em <strong className="text-slate-100">Entrar com Google</strong>.
-                      </li>
-                    </ol>
-                  </div>
-                )}
+            {unauthorizedDomain && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-[#0B0F17] px-3 py-2">
+                <span className="text-[11px] text-slate-400">Domínio detectado:</span>
+                <code className="text-[11px] font-mono text-sky-300 break-all flex-1">
+                  {unauthorizedDomain}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyDomain()}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/10 bg-[#111827] hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
+                >
+                  {copiedDomain ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      Copiar domínio
+                    </>
+                  )}
+                </button>
               </div>
             )}
+
+            <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
+              <li>
+                Clique em <strong className="text-slate-100">Abrir domínios autorizados</strong> e vá em{' '}
+                <span className="font-mono text-slate-200">Authentication &gt; Settings &gt; Authorized domains</span>.
+              </li>
+              <li>
+                Clique em <strong className="text-slate-100">Add domain</strong> e cole o domínio copiado acima.
+              </li>
+              <li>
+                Volte aqui e clique novamente no <strong className="text-slate-100">ícone da nuvem</strong> no topo.
+              </li>
+            </ol>
           </section>
         )}
 
