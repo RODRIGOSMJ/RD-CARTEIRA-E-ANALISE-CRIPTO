@@ -71,7 +71,21 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
+export const firebaseProjectId = firebaseConfig.projectId;
+export const firebaseAuthDomainsSettingsUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
+
+export function isUnauthorizedDomainError(err: unknown): boolean {
+  const code = typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code?: unknown }).code ?? '')
+    : '';
+  const msg = err instanceof Error ? err.message : String(err);
+  return code === 'auth/unauthorized-domain' || msg.includes('auth/unauthorized-domain');
+}
+
 export function formatFriendlyFirestoreError(err: unknown): string {
+  const code = typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code?: unknown }).code ?? '')
+    : '';
   const raw = err instanceof Error ? err.message : String(err);
   let msg = raw;
   try {
@@ -81,6 +95,19 @@ export function formatFriendlyFirestoreError(err: unknown): string {
     // not JSON
   }
 
+  if (code === 'auth/unauthorized-domain' || msg.includes('auth/unauthorized-domain')) {
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'este domínio';
+    return `Domínio publicado (${host}) ainda não autorizado no Firebase Auth. Adicione "${host}" em Authentication > Settings > Authorized domains no Console do Firebase.`;
+  }
+  if (code === 'auth/popup-blocked' || msg.includes('auth/popup-blocked')) {
+    return 'O navegador bloqueou a janela de login do Google. Permita pop-ups para este site e tente novamente.';
+  }
+  if (code === 'auth/network-request-failed' || msg.includes('auth/network-request-failed')) {
+    return 'Falha de rede ao conectar com o login do Google. Verifique sua conexão e tente novamente.';
+  }
+  if (code === 'auth/operation-not-allowed' || msg.includes('auth/operation-not-allowed')) {
+    return 'O provedor Google não está ativado no Firebase Authentication deste projeto.';
+  }
   if (msg.includes('Quota exceeded')) {
     if (msg.includes('Free daily read units per project')) {
       return `Limite diário gratuito do Firestore atingido. O limite reinicia amanhã ou pode ser acompanhado no console: https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId}/data?openUpgradeDialog=true`;

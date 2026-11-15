@@ -1,10 +1,13 @@
 import {
   Bell,
   BrainCircuit,
+  Check,
   CheckCircle2,
   Clock,
   Cloud,
   CloudCheck,
+  Copy,
+  ExternalLink,
   Loader2,
   LogIn,
   LogOut,
@@ -28,7 +31,10 @@ import { TriggersPanel } from './components/TriggersPanel.tsx';
 import { WhatsAppSettingsPanel } from './components/WhatsAppSettingsPanel.tsx';
 import {
   auth,
+  firebaseAuthDomainsSettingsUrl,
+  firebaseProjectId,
   formatFriendlyFirestoreError,
+  isUnauthorizedDomainError,
   onAuthStateChanged,
   signInWithGoogle,
   signOutCloud,
@@ -122,6 +128,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [cloudUser, setCloudUser] = useState<User | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [cloudData, setCloudData] = useState<CloudWorkspaceData | null>(null);
   const [cloudSnapshots, setCloudSnapshots] = useState<Record<string, MarketSnapshot>>({});
   const [cloudUsdBrlRate, setCloudUsdBrlRate] = useState<number>(5.75);
@@ -248,6 +256,7 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        setUnauthorizedDomain(null);
         try {
           await ensureUserCloudProfile(user.uid, localStateRef.current);
           setCloudUser(user);
@@ -664,14 +673,35 @@ export default function App() {
   async function handleGoogleSignIn() {
     setAuthBusy(true);
     setError(null);
+    setUnauthorizedDomain(null);
     try {
       await signInWithGoogle();
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
+        if (isUnauthorizedDomainError(err)) {
+          const detectedHost =
+            typeof window !== 'undefined' && window.location.hostname
+              ? window.location.hostname
+              : '';
+          setUnauthorizedDomain(detectedHost);
+        }
         setError(formatFriendlyFirestoreError(err));
       }
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function handleCopyDomain() {
+    if (!unauthorizedDomain || typeof navigator === 'undefined' || !navigator.clipboard) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(unauthorizedDomain);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    } catch {
+      // ignore clipboard errors on restricted contexts
     }
   }
 
@@ -1565,34 +1595,100 @@ export default function App() {
                 </button>
               </>
             ) : (
-              <>
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
-                    <Cloud className="w-4 h-4 text-sky-400" />
+              <div className="w-full space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
+                      <Cloud className="w-4 h-4 text-sky-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-100">
+                        Sincronize seus dados entre computador, tablet e celular
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Entre com sua conta Google nos seus dispositivos para manter carteira, ativos e gatilhos do WhatsApp sempre iguais em todos eles.
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-100">
-                      Sincronize seus dados entre computador, tablet e celular
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Entre com sua conta Google nos seus dispositivos para manter carteira, ativos e gatilhos do WhatsApp sempre iguais em todos eles.
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    disabled={authBusy}
+                    onClick={() => void handleGoogleSignIn()}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+                  >
+                    {authBusy ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <LogIn className="w-3.5 h-3.5" />
+                    )}
+                    Entrar com Google
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={authBusy}
-                  onClick={() => void handleGoogleSignIn()}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
-                >
-                  {authBusy ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <LogIn className="w-3.5 h-3.5" />
-                  )}
-                  Entrar com Google
-                </button>
-              </>
+
+                {unauthorizedDomain !== null && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-3.5 space-y-2.5 text-xs">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1 min-w-0">
+                        <p className="font-semibold text-amber-200">
+                          Autorize este domínio publicado no Firebase para liberar o login Google
+                        </p>
+                        <p className="text-[11px] text-slate-300">
+                          Por segurança, o Firebase Authentication bloqueia o login em endereços novos até que você adicione o domínio no projeto{' '}
+                          <span className="font-mono text-amber-200">{firebaseProjectId}</span>.
+                        </p>
+                      </div>
+                      <a
+                        href={firebaseAuthDomainsSettingsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Abrir domínios autorizados
+                      </a>
+                    </div>
+
+                    {unauthorizedDomain && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-[#0B0F17] px-3 py-2">
+                        <span className="text-[11px] text-slate-400">Domínio detectado:</span>
+                        <code className="text-[11px] font-mono text-sky-300 break-all flex-1">
+                          {unauthorizedDomain}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyDomain()}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/10 bg-[#111827] hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
+                        >
+                          {copiedDomain ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              Copiado
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              Copiar domínio
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
+                      <li>
+                        Clique em <strong className="text-slate-100">Abrir domínios autorizados</strong> e vá em{' '}
+                        <span className="font-mono text-slate-200">Authentication &gt; Settings &gt; Authorized domains</span>.
+                      </li>
+                      <li>
+                        Clique em <strong className="text-slate-100">Add domain</strong> e cole o domínio copiado acima.
+                      </li>
+                      <li>
+                        Volte aqui e clique novamente em <strong className="text-slate-100">Entrar com Google</strong>.
+                      </li>
+                    </ol>
+                  </div>
+                )}
+              </div>
             )}
           </section>
         )}
