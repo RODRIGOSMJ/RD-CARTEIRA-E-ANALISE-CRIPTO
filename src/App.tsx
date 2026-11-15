@@ -23,7 +23,10 @@ import { AddTransactionModal } from './components/AddTransactionModal.tsx';
 import { AddTriggerModal } from './components/AddTriggerModal.tsx';
 import { AssetDetailPanel } from './components/AssetDetailPanel.tsx';
 import { AutomationSettingsPanel } from './components/AutomationSettingsPanel.tsx';
+import { CryptoLogo } from './components/CryptoLogo.tsx';
+import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { PortfolioView } from './components/PortfolioView.tsx';
+import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { SignalBadge } from './components/SignalBadge.tsx';
 import { Sparkline } from './components/Sparkline.tsx';
 import { TriggersPanel } from './components/TriggersPanel.tsx';
@@ -1490,6 +1493,8 @@ export default function App() {
               </div>
             )}
 
+            <PWAInstallButton />
+
             <button
               type="button"
               disabled={
@@ -1566,6 +1571,12 @@ export default function App() {
                     }}
                     className="inline-flex items-center gap-2 text-xs text-slate-200 hover:text-white underline-offset-4 hover:underline"
                   >
+                    <CryptoLogo
+                      symbol={al.symbol}
+                      coinId={al.coinId}
+                      name={al.name}
+                      size="xs"
+                    />
                     <span className="font-mono font-semibold">{al.symbol}</span>
                     <SignalBadge action={al.action} compact />
                   </button>
@@ -1922,7 +1933,13 @@ export default function App() {
                                   >
                                     <td className="py-3 px-5">
                                       <div className="flex items-center gap-2.5">
-                                        <span className="font-mono font-bold text-xs text-slate-100 w-11 shrink-0">
+                                        <CryptoLogo
+                                          symbol={asset.symbol}
+                                          coinId={asset.id}
+                                          name={asset.name}
+                                          size="sm"
+                                        />
+                                        <span className="font-mono font-bold text-xs text-slate-100 shrink-0">
                                           {asset.symbol}
                                         </span>
                                         <span className="text-xs text-slate-300 truncate max-w-[120px]">
@@ -2082,6 +2099,12 @@ export default function App() {
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
+                                  <CryptoLogo
+                                    symbol={alert.symbol}
+                                    coinId={alert.coinId}
+                                    name={alert.name}
+                                    size="xs"
+                                  />
                                   <span className="font-mono font-bold text-xs text-slate-100">
                                     {alert.symbol}
                                   </span>
@@ -2265,10 +2288,20 @@ export default function App() {
                           return (
                             <tr key={asset.id} className="hover:bg-white/[0.02]">
                               <td className="py-3.5 px-5">
-                                <div className="font-mono font-bold text-slate-100">
-                                  {asset.symbol}
+                                <div className="flex items-center gap-3">
+                                  <CryptoLogo
+                                    symbol={asset.symbol}
+                                    coinId={asset.id}
+                                    name={asset.name}
+                                    size="sm"
+                                  />
+                                  <div>
+                                    <div className="font-mono font-bold text-slate-100">
+                                      {asset.symbol}
+                                    </div>
+                                    <div className="text-slate-400">{asset.name}</div>
+                                  </div>
                                 </div>
-                                <div className="text-slate-400">{asset.name}</div>
                               </td>
                               <td className="py-3.5 px-3 text-right font-mono font-semibold text-slate-100 tabular-nums whitespace-nowrap">
                                 {snap
@@ -2574,6 +2607,12 @@ export default function App() {
                               <div key={alert.id} className="p-5 space-y-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div className="flex items-center gap-2.5">
+                                    <CryptoLogo
+                                      symbol={alert.symbol}
+                                      coinId={alert.coinId}
+                                      name={alert.name}
+                                      size="sm"
+                                    />
                                     <span className="font-mono font-bold text-sm text-slate-100">
                                       {alert.symbol}
                                     </span>
@@ -2708,6 +2747,7 @@ export default function App() {
           onSubmit={handleCreateTrigger}
         />
       )}
+      <OfflineIndicator />
     </div>
   );
 }

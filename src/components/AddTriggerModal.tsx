@@ -9,6 +9,7 @@ import type {
   WatchlistAsset,
 } from '../types/crypto.ts';
 import { formatPrice } from '../utils/format.ts';
+import { CryptoLogo } from './CryptoLogo.tsx';
 
 interface SearchResult {
   id: string;
@@ -301,7 +302,13 @@ export function AddTriggerModal({
 
             {selectedCoin && (
               <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-xs">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CryptoLogo
+                    symbol={selectedCoin.symbol}
+                    coinId={selectedCoin.id}
+                    name={selectedCoin.name}
+                    size="sm"
+                  />
                   <span className="font-semibold text-slate-100">{selectedCoin.name}</span>
                   <span className="font-mono text-sky-400">{selectedCoin.symbol}</span>
                   {effectiveLiveUsd && (
@@ -346,8 +353,14 @@ export function AddTriggerModal({
                         key={w.id}
                         type="button"
                         onClick={() => void selectAsset(w)}
-                        className="px-2.5 py-1 text-[11px] font-mono rounded-md border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-md border border-white/10 bg-[#0B0F17] hover:bg-slate-800 text-slate-200 transition-colors"
                       >
+                        <CryptoLogo
+                          symbol={w.symbol}
+                          coinId={w.id}
+                          name={w.name}
+                          size="xs"
+                        />
                         {w.symbol}
                       </button>
                     ))}
@@ -363,9 +376,15 @@ export function AddTriggerModal({
                         onClick={() => void selectAsset(c)}
                         className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-white/[0.04] transition-colors text-xs"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CryptoLogo
+                            symbol={c.symbol}
+                            coinId={c.id}
+                            name={c.name}
+                            size="xs"
+                          />
                           <span className="font-mono font-bold text-slate-100">{c.symbol}</span>
-                          <span className="text-slate-400">{c.name}</span>
+                          <span className="text-slate-400 truncate">{c.name}</span>
                         </div>
                         {c.marketCapRank && (
                           <span className="font-mono text-[11px] text-slate-500">

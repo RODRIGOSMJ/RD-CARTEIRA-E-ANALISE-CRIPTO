@@ -24,6 +24,7 @@ import {
   formatPrice,
   formatSignedCurrency,
 } from '../utils/format.ts';
+import { CryptoLogo } from './CryptoLogo.tsx';
 import { SignalBadge } from './SignalBadge.tsx';
 
 interface PortfolioViewProps {
@@ -411,6 +412,12 @@ export function PortfolioView({
                                   ALLOCATION_COLORS[idx % ALLOCATION_COLORS.length],
                               }}
                             />
+                            <CryptoLogo
+                              symbol={h.symbol}
+                              coinId={h.coinId}
+                              name={h.name}
+                              size="xs"
+                            />
                             <span className="font-mono font-semibold text-slate-100">
                               {h.symbol}
                             </span>
@@ -713,7 +720,13 @@ export function PortfolioView({
                 <span className="block text-xs text-slate-400">Melhor ativo</span>
                 {portfolio.bestPerformer ? (
                   <div className="mt-2 space-y-0.5">
-                    <div className="font-mono font-bold text-base text-slate-100 truncate">
+                    <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-100 truncate">
+                      <CryptoLogo
+                        symbol={portfolio.bestPerformer.symbol}
+                        coinId={portfolio.bestPerformer.coinId}
+                        name={portfolio.bestPerformer.name}
+                        size="sm"
+                      />
                       {portfolio.bestPerformer.symbol}
                     </div>
                     <div
@@ -742,7 +755,13 @@ export function PortfolioView({
                 <span className="block text-xs text-slate-400">Pior ativo</span>
                 {portfolio.worstPerformer ? (
                   <div className="mt-2 space-y-0.5">
-                    <div className="font-mono font-bold text-base text-slate-100 truncate">
+                    <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-100 truncate">
+                      <CryptoLogo
+                        symbol={portfolio.worstPerformer.symbol}
+                        coinId={portfolio.worstPerformer.coinId}
+                        name={portfolio.worstPerformer.name}
+                        size="sm"
+                      />
                       {portfolio.worstPerformer.symbol}
                     </div>
                     <div
@@ -841,7 +860,13 @@ export function PortfolioView({
                               onClick={() => onSelectAssetForAI(h.coinId)}
                               className="text-left group"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <CryptoLogo
+                                  symbol={h.symbol}
+                                  coinId={h.coinId}
+                                  name={h.name}
+                                  size="sm"
+                                />
                                 <span className="font-semibold text-slate-100 group-hover:text-sky-400 transition-colors">
                                   {h.name}
                                 </span>
@@ -1030,8 +1055,16 @@ export function PortfolioView({
                             </span>
                           </td>
                           <td className="py-3 px-3 font-medium text-slate-200">
-                            <span className="font-mono font-bold mr-1.5">{tx.symbol}</span>
-                            <span className="text-slate-400">{tx.name}</span>
+                            <div className="flex items-center gap-2">
+                              <CryptoLogo
+                                symbol={tx.symbol}
+                                coinId={tx.coinId}
+                                name={tx.name}
+                                size="xs"
+                              />
+                              <span className="font-mono font-bold">{tx.symbol}</span>
+                              <span className="text-slate-400">{tx.name}</span>
+                            </div>
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-slate-200 tabular-nums">
                             {hideBalances

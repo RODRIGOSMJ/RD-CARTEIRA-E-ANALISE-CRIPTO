@@ -1,6 +1,7 @@
 import { BellRing, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { MarketSnapshot, PriceTrigger } from '../types/crypto.ts';
 import { formatPercent, formatPrice } from '../utils/format.ts';
+import { CryptoLogo } from './CryptoLogo.tsx';
 
 interface TriggersPanelProps {
   triggers: PriceTrigger[];
@@ -157,6 +158,12 @@ export function TriggersPanel({
               <div key={trig.id} className="p-5 space-y-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2.5">
+                    <CryptoLogo
+                      symbol={trig.symbol}
+                      coinId={trig.coinId}
+                      name={trig.name}
+                      size="sm"
+                    />
                     <span className="font-mono font-bold text-sm text-slate-100">
                       {trig.symbol}
                     </span>

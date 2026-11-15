@@ -1,6 +1,7 @@
 import { Loader2, Plus, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { apiSearchCryptos } from '../services/apiClient.ts';
+import { CryptoLogo } from './CryptoLogo.tsx';
 
 interface SearchResult {
   id: string;
@@ -138,20 +139,28 @@ export function AddAssetModal({
                       key={coin.id}
                       className="flex items-center justify-between px-3.5 py-2.5 hover:bg-white/[0.02]"
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-slate-100 font-mono">
-                            {coin.symbol}
-                          </span>
-                          <span className="text-xs text-slate-300 truncate">
-                            {coin.name}
-                          </span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <CryptoLogo
+                          symbol={coin.symbol}
+                          coinId={coin.id}
+                          name={coin.name}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-100 font-mono">
+                              {coin.symbol}
+                            </span>
+                            <span className="text-xs text-slate-300 truncate">
+                              {coin.name}
+                            </span>
+                          </div>
+                          {coin.marketCapRank && (
+                            <span className="text-[11px] text-slate-500 font-mono tabular-nums">
+                              Rank #{coin.marketCapRank}
+                            </span>
+                          )}
                         </div>
-                        {coin.marketCapRank && (
-                          <span className="text-[11px] text-slate-500 font-mono tabular-nums">
-                            Rank #{coin.marketCapRank}
-                          </span>
-                        )}
                       </div>
                       <button
                         type="button"

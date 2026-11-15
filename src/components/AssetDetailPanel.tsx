@@ -12,6 +12,7 @@ import {
   formatRelativeTime,
   formatSignedCurrency,
 } from '../utils/format.ts';
+import { CryptoLogo } from './CryptoLogo.tsx';
 import { PriceChart } from './PriceChart.tsx';
 import { SignalBadge } from './SignalBadge.tsx';
 
@@ -66,6 +67,12 @@ export function AssetDetailPanel({
       <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-3">
+            <CryptoLogo
+              symbol={asset.symbol}
+              coinId={asset.id}
+              name={asset.name}
+              size="lg"
+            />
             <h2 className="text-lg font-bold text-slate-100 tracking-tight">
               {asset.name}
             </h2>
