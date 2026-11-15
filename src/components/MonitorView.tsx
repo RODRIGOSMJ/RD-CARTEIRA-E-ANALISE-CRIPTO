@@ -3,10 +3,13 @@ import {
   ArrowRight,
   Check,
   Coins,
+  LayoutGrid,
+  List,
   Plus,
   RefreshCw,
   RotateCcw,
   SlidersHorizontal,
+  Square,
   TrendingDown,
   TrendingUp,
   Zap,
@@ -28,8 +31,23 @@ interface MonitorViewProps {
   onSelectAsset?: (coinId: string) => void;
 }
 
+type MonitorLayoutMode = 'large' | 'small' | 'list';
+
 const MONITOR_ORDER_KEY = 'sinalcripto_monitor_order_v1';
 const MONITOR_CUSTOM_PRICES_KEY = 'sinalcripto_monitor_custom_prices_v1';
+const MONITOR_LAYOUT_KEY = 'sinalcripto_monitor_layout_v1';
+
+function loadSavedLayout(): MonitorLayoutMode {
+  try {
+    const raw = localStorage.getItem(MONITOR_LAYOUT_KEY);
+    if (raw === 'large' || raw === 'small' || raw === 'list') {
+      return raw;
+    }
+  } catch {
+    // ignore storage read errors
+  }
+  return 'large';
+}
 
 function loadSavedOrder(): string[] {
   try {
@@ -114,6 +132,7 @@ export function MonitorView({
   onLaunchGain,
   onSelectAsset,
 }: MonitorViewProps) {
+  const [layoutMode, setLayoutMode] = useState<MonitorLayoutMode>(loadSavedLayout);
   const [savedOrder, setSavedOrder] = useState<string[]>(loadSavedOrder);
   const [customPricesUsd, setCustomPricesUsd] = useState<Record<string, number>>(loadCustomPrices);
   const [editOrderMode, setEditOrderMode] = useState(false);
@@ -154,6 +173,14 @@ export function MonitorView({
       // ignore storage quota errors
     }
   }, [savedOrder]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MONITOR_LAYOUT_KEY, layoutMode);
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [layoutMode]);
 
   useEffect(() => {
     try {
@@ -272,6 +299,41 @@ export function MonitorView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* Layout Mode Selector: Quadrado grande / Quadrado pequeno / Lista */}
+          <div
+            role="group"
+            aria-label="Modo de visualização do monitor"
+            className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-[#0B0F17] p-1 border border-slate-200 dark:border-white/[0.08]"
+          >
+            {(
+              [
+                { id: 'large', label: 'Quadrado grande', shortLabel: 'Grande', Icon: Square },
+                { id: 'small', label: 'Quadrado pequeno', shortLabel: 'Pequeno', Icon: LayoutGrid },
+                { id: 'list', label: 'Lista', shortLabel: 'Lista', Icon: List },
+              ] as const
+            ).map(({ id, label, shortLabel, Icon }) => {
+              const active = layoutMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setLayoutMode(id)}
+                  aria-pressed={active}
+                  title={label}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                    active
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline">{label}</span>
+                  <span className="sm:hidden">{shortLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <button
             type="button"
             onClick={onManualRefresh}
@@ -364,9 +426,9 @@ export function MonitorView({
             Adicionar criptomoeda
           </button>
         </div>
-      ) : (
-        /* 4-column Responsive Card Grid matching reference */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      ) : layoutMode === 'list' ? (
+        /* Compact List View */
+        <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none overflow-hidden divide-y divide-slate-200 dark:divide-white/[0.06]">
           {orderedAssets.map((asset, index) => {
             const snap = snapshots[asset.id];
             const overrideUsd = customPricesUsd[asset.id];
@@ -381,20 +443,41 @@ export function MonitorView({
             return (
               <article
                 key={asset.id}
-                className={`group relative rounded-xl border bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4 flex flex-col justify-between gap-4 transition-colors ${
-                  flashDir === 'up'
-                    ? 'border-emerald-400 dark:border-emerald-500/50'
-                    : flashDir === 'down'
-                    ? 'border-rose-400 dark:border-rose-500/50'
-                    : 'border-slate-200 dark:border-white/[0.08] hover:border-sky-400/50 dark:hover:border-sky-500/30'
-                }`}
+                className="group px-3.5 sm:px-5 py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors"
               >
-                {/* Top Rank Tag (#1, #2, ...) + Reorder controls when editing */}
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#1B2333] border border-slate-200 dark:border-white/[0.08] text-[10px] font-mono font-semibold text-slate-600 dark:text-slate-400 tabular-nums">
+                {/* Rank + Identity */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className="inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#1B2333] border border-slate-200 dark:border-white/[0.08] text-[10px] font-mono font-semibold text-slate-600 dark:text-slate-400 tabular-nums shrink-0">
                     #{index + 1}
                   </span>
 
+                  <button
+                    type="button"
+                    onClick={() => onSelectAsset?.(asset.id)}
+                    className="flex items-center gap-2.5 min-w-0 text-left group/title focus-visible:outline-none"
+                    title={`Abrir análise técnica de ${asset.name} (${asset.symbol})`}
+                  >
+                    <CryptoLogo
+                      symbol={asset.symbol}
+                      coinId={asset.id}
+                      name={asset.name}
+                      size="sm"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-slate-900 dark:text-slate-100 group-hover/title:text-sky-600 dark:group-hover/title:text-sky-400 transition-colors">
+                          {asset.symbol}
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          {asset.name}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Price + 24h Badge + Reorder / Actions */}
+                <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-4 w-full sm:w-auto">
                   {editOrderMode ? (
                     <div className="flex items-center gap-1">
                       <button
@@ -430,9 +513,177 @@ export function MonitorView({
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
+                  ) : null}
+
+                  {isEditingPrice ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={priceDraft}
+                        onChange={(e) => setPriceDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveAdjustedPrice(asset.id);
+                          if (e.key === 'Escape') setEditingPriceCoinId(null);
+                        }}
+                        placeholder={currency === 'BRL' ? '0.00 BRL' : '0.00 USD'}
+                        className="w-28 px-2 py-1 text-xs font-mono tabular-nums rounded-lg border border-sky-400 dark:border-sky-500/50 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveAdjustedPrice(asset.id)}
+                        className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white shrink-0"
+                      >
+                        OK
+                      </button>
+                      {overrideUsd && (
+                        <button
+                          type="button"
+                          onClick={() => clearAdjustedPrice(asset.id)}
+                          title="Voltar para cotação ao vivo"
+                          className="px-2 py-1 text-[11px] rounded-lg border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                        >
+                          Auto
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openAdjustPrice(asset.id, effectivePriceUsd)}
+                        title="Ajustar cotação manualmente"
+                        className={`text-[11px] font-medium text-sky-700 dark:text-sky-400 hover:underline transition-opacity ${
+                          effectivePriceUsd <= 0 || overrideUsd
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                        }`}
+                      >
+                        {overrideUsd ? 'Manual' : 'Ajustar'}
+                      </button>
+                      <span
+                        className={`text-sm sm:text-base font-mono font-bold tabular-nums tracking-tight transition-colors ${
+                          flashDir === 'up'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : flashDir === 'down'
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : 'text-slate-900 dark:text-white'
+                        }`}
+                      >
+                        {formatMonitorPrice(effectivePriceUsd, currency, usdBrlRate)}
+                      </span>
+                    </div>
+                  )}
+
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-mono font-semibold tabular-nums whitespace-nowrap ${
+                      isPositive
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-400'
+                    }`}
+                  >
+                    {isPositive ? (
+                      <TrendingUp className="w-3 h-3 shrink-0" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3 shrink-0" />
+                    )}
+                    {formatSigned24h(change24h)}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => onLaunchGain(asset.id)}
+                    className="inline-flex items-center gap-1 py-1.5 px-2.5 rounded-lg border border-sky-300/80 dark:border-sky-500/25 bg-sky-50/70 dark:bg-[#132238] hover:bg-sky-100 dark:hover:bg-[#192D4A] text-sky-800 dark:text-sky-200 text-xs font-medium transition-colors whitespace-nowrap"
+                  >
+                    <Zap className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
+                    Lançar Ganho
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        /* Grid View: Quadrado Grande vs Quadrado Pequeno */
+        <div
+          className={
+            layoutMode === 'small'
+              ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5'
+              : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+          }
+        >
+          {orderedAssets.map((asset, index) => {
+            const snap = snapshots[asset.id];
+            const overrideUsd = customPricesUsd[asset.id];
+            const livePriceUsd = snap?.priceUsd ?? 0;
+            const effectivePriceUsd =
+              overrideUsd && overrideUsd > 0 ? overrideUsd : livePriceUsd;
+            const change24h = snap?.change24hPct ?? 0;
+            const isPositive = change24h >= 0;
+            const flashDir = flashMap[asset.id];
+            const isEditingPrice = editingPriceCoinId === asset.id;
+            const isSmall = layoutMode === 'small';
+
+            return (
+              <article
+                key={asset.id}
+                className={`group relative rounded-xl border bg-white dark:bg-[#111827] shadow-xs dark:shadow-none flex flex-col justify-between transition-colors ${
+                  isSmall ? 'p-3 gap-2.5' : 'p-5 gap-4'
+                } ${
+                  flashDir === 'up'
+                    ? 'border-emerald-400 dark:border-emerald-500/50'
+                    : flashDir === 'down'
+                    ? 'border-rose-400 dark:border-rose-500/50'
+                    : 'border-slate-200 dark:border-white/[0.08] hover:border-sky-400/50 dark:hover:border-sky-500/30'
+                }`}
+              >
+                {/* Top Rank Tag (#1, #2, ...) + Reorder controls when editing */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#1B2333] border border-slate-200 dark:border-white/[0.08] text-[10px] font-mono font-semibold text-slate-600 dark:text-slate-400 tabular-nums">
+                    #{index + 1}
+                  </span>
+
+                  {editOrderMode ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => moveAsset(index, -1)}
+                        title="Mover para trás"
+                        aria-label={`Mover ${asset.symbol} para posição anterior`}
+                        className="p-1 rounded border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-[#0B0F17] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30"
+                      >
+                        <ArrowLeft className="w-3 h-3" />
+                      </button>
+                      <select
+                        value={index + 1}
+                        onChange={(e) => moveAssetToPosition(index, Number(e.target.value))}
+                        aria-label={`Posição de ${asset.symbol}`}
+                        className="px-1 py-0.5 text-[11px] font-mono rounded border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-[#0B0F17] text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500"
+                      >
+                        {orderedAssets.map((_, posIdx) => (
+                          <option key={posIdx + 1} value={posIdx + 1}>
+                            #{posIdx + 1}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={index === orderedAssets.length - 1}
+                        onClick={() => moveAsset(index, 1)}
+                        title="Mover para frente"
+                        aria-label={`Mover ${asset.symbol} para próxima posição`}
+                        className="p-1 rounded border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-[#0B0F17] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30"
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
                   ) : (
                     <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-mono font-semibold tabular-nums whitespace-nowrap ${
+                      className={`inline-flex items-center gap-1 rounded-full border font-mono font-semibold tabular-nums whitespace-nowrap ${
+                        isSmall ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]'
+                      } ${
                         isPositive
                           ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
                           : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-400'
@@ -453,20 +704,30 @@ export function MonitorView({
                   <button
                     type="button"
                     onClick={() => onSelectAsset?.(asset.id)}
-                    className="flex items-center gap-3 min-w-0 text-left group/title focus-visible:outline-none"
+                    className={`flex items-center min-w-0 text-left group/title focus-visible:outline-none ${
+                      isSmall ? 'gap-2' : 'gap-3'
+                    }`}
                     title={`Abrir análise técnica de ${asset.name} (${asset.symbol})`}
                   >
                     <CryptoLogo
                       symbol={asset.symbol}
                       coinId={asset.id}
                       name={asset.name}
-                      size="lg"
+                      size={isSmall ? 'sm' : 'lg'}
                     />
                     <div className="min-w-0">
-                      <div className="font-mono font-bold text-base text-slate-900 dark:text-slate-100 leading-tight group-hover/title:text-sky-600 dark:group-hover/title:text-sky-400 transition-colors">
+                      <div
+                        className={`font-mono font-bold text-slate-900 dark:text-slate-100 leading-tight group-hover/title:text-sky-600 dark:group-hover/title:text-sky-400 transition-colors ${
+                          isSmall ? 'text-sm' : 'text-base'
+                        }`}
+                      >
                         {asset.symbol}
                       </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                      <div
+                        className={`text-slate-600 dark:text-slate-400 truncate ${
+                          isSmall ? 'text-[11px]' : 'text-xs'
+                        }`}
+                      >
                         {asset.name}
                       </div>
                     </div>
@@ -475,9 +736,9 @@ export function MonitorView({
 
                 {/* Price Section */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-                      PREÇO ATUAL ({currency})
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400 truncate">
+                      {isSmall ? currency : `PREÇO ATUAL (${currency})`}
                     </span>
                     <button
                       type="button"
@@ -486,18 +747,18 @@ export function MonitorView({
                           ? setEditingPriceCoinId(null)
                           : openAdjustPrice(asset.id, effectivePriceUsd)
                       }
-                      className={`text-[11px] font-medium text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 underline underline-offset-2 transition-opacity ${
+                      className={`text-[10px] font-medium text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 underline underline-offset-2 transition-opacity shrink-0 ${
                         effectivePriceUsd <= 0 || overrideUsd || isEditingPrice
                           ? 'opacity-100'
                           : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
                       }`}
                     >
-                      {overrideUsd ? 'Cotação manual' : 'Ajustar Cotação'}
+                      {overrideUsd ? 'Manual' : isSmall ? 'Ajustar' : 'Ajustar Cotação'}
                     </button>
                   </div>
 
                   {isEditingPrice ? (
-                    <div className="flex items-center gap-1.5 pt-0.5">
+                    <div className="flex items-center gap-1 pt-0.5">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -508,13 +769,13 @@ export function MonitorView({
                           if (e.key === 'Escape') setEditingPriceCoinId(null);
                         }}
                         placeholder={currency === 'BRL' ? '0.00 BRL' : '0.00 USD'}
-                        className="w-full min-w-0 px-2.5 py-1.5 text-xs font-mono tabular-nums rounded-lg border border-sky-400 dark:border-sky-500/50 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none"
+                        className="w-full min-w-0 px-2 py-1 text-xs font-mono tabular-nums rounded-lg border border-sky-400 dark:border-sky-500/50 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none"
                         autoFocus
                       />
                       <button
                         type="button"
                         onClick={() => saveAdjustedPrice(asset.id)}
-                        className="px-2.5 py-1.5 text-[11px] font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white shrink-0"
+                        className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white shrink-0"
                       >
                         OK
                       </button>
@@ -523,7 +784,7 @@ export function MonitorView({
                           type="button"
                           onClick={() => clearAdjustedPrice(asset.id)}
                           title="Voltar para cotação ao vivo"
-                          className="px-2 py-1.5 text-[11px] rounded-lg border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                          className="px-1.5 py-1 text-[10px] rounded-lg border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
                         >
                           Auto
                         </button>
@@ -531,7 +792,9 @@ export function MonitorView({
                     </div>
                   ) : (
                     <div
-                      className={`text-2xl font-mono font-bold tabular-nums tracking-tight transition-colors ${
+                      className={`font-mono font-bold tabular-nums tracking-tight transition-colors truncate ${
+                        isSmall ? 'text-base sm:text-lg' : 'text-2xl sm:text-[26px]'
+                      } ${
                         flashDir === 'up'
                           ? 'text-emerald-600 dark:text-emerald-400'
                           : flashDir === 'down'
@@ -544,14 +807,18 @@ export function MonitorView({
                   )}
                 </div>
 
-                {/* Bottom Action CTA matching screenshot */}
+                {/* Bottom Action CTA */}
                 <button
                   type="button"
                   onClick={() => onLaunchGain(asset.id)}
-                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-sky-300/80 dark:border-sky-500/25 bg-sky-50/70 dark:bg-[#132238] hover:bg-sky-100 dark:hover:bg-[#192D4A] text-sky-800 dark:text-sky-200 text-xs font-medium transition-colors"
+                  className={`w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-300/80 dark:border-sky-500/25 bg-sky-50/70 dark:bg-[#132238] hover:bg-sky-100 dark:hover:bg-[#192D4A] text-sky-800 dark:text-sky-200 font-medium transition-colors ${
+                    isSmall ? 'py-1.5 px-2 text-[11px]' : 'py-2 px-3 text-xs'
+                  }`}
                 >
                   <Zap className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span className="truncate">Lançar Ganho com {asset.symbol}</span>
+                  <span className="truncate">
+                    {isSmall ? `Ganho ${asset.symbol}` : `Lançar Ganho com ${asset.symbol}`}
+                  </span>
                 </button>
               </article>
             );
