@@ -20,8 +20,8 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'SinalCripto IA',
-          short_name: 'SinalCripto',
+          name: 'RD Crypto',
+          short_name: 'RD Crypto',
           description:
             'Plataforma autônoma de inteligência artificial para análise, carteira e alertas 24h de criptomoedas.',
           theme_color: '#0B0F17',

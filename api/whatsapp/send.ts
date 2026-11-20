@@ -130,7 +130,7 @@ export default async function handler(req: any, res: any) {
           text,
           message: text,
           textMessage: { text },
-          source: 'SinalCripto IA',
+          source: 'RD Crypto',
           metadata: body.metadata,
         }),
         signal: AbortSignal.timeout(10_000),

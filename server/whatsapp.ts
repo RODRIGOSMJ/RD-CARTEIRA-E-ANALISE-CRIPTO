@@ -132,7 +132,7 @@ export async function sendWhatsAppMessage(
           text,
           message: text,
           textMessage: { text },
-          source: 'SinalCripto IA',
+          source: 'RD Crypto',
           metadata,
         }),
         signal: AbortSignal.timeout(10_000),
@@ -230,7 +230,7 @@ export function formatTriggerWhatsAppText(
     minute: '2-digit',
   });
   const lines = [
-    `*SinalCripto IA — Gatilho Disparado (24h)*`,
+    `*RD Crypto — Gatilho Disparado (24h)*`,
     ``,
     `*Ativo:* ${trigger.name} (${trigger.symbol})`,
     `*Condição:* ${describeTriggerCondition(trigger, actualMovePct)}`,
@@ -261,7 +261,7 @@ export function formatAiAlertsWhatsAppText(
   alerts: SignalAlert[],
   usdBrlRate: number
 ): string {
-  const header = `*SinalCripto IA — Novo Sinal Automático*`;
+  const header = `*RD Crypto — Novo Sinal Automático*`;
   const blocks = alerts.map((a) => {
     const verdictLabel = getVerdictBadgeMeta(a.action, { headline: a.headline }).label;
     return [

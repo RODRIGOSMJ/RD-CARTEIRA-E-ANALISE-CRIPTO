@@ -75,7 +75,7 @@ export async function dispatchWebhookNotification(
       (a) =>
         `• **${a.symbol} (${a.name})**: **${a.action}** (Confiança ${a.confidence}%) @ US$ ${a.priceAtSignalUsd.toLocaleString('en-US', { maximumFractionDigits: 6 })} — ${a.headline}`
     );
-    const content = `**SinalCripto IA — Novas Sugestões Automáticas**\n${lines.join('\n')}`;
+    const content = `**RD Crypto — Novas Sugestões Automáticas**\n${lines.join('\n')}`;
 
     const res = await fetch(webhookUrl, {
       method: 'POST',
@@ -83,7 +83,7 @@ export async function dispatchWebhookNotification(
       body: JSON.stringify({
         content,
         text: content,
-        source: 'SinalCripto IA',
+        source: 'RD Crypto',
         alerts,
       }),
       signal: AbortSignal.timeout(5000),
@@ -283,7 +283,7 @@ ${JSON.stringify(contextPayload, null, 2)}
         contents: prompt,
         config: {
           systemInstruction:
-            'Você é o motor analítico autônomo do SinalCripto IA. Responda exclusivamente em JSON válido seguindo o schema, em Português (PT-BR). Nunca invente preços fora da escala do ativo analisado.',
+            'Você é o motor analítico autônomo do RD Crypto. Responda exclusivamente em JSON válido seguindo o schema, em Português (PT-BR). Nunca invente preços fora da escala do ativo analisado.',
           thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
           responseMimeType: 'application/json',
           responseSchema: {

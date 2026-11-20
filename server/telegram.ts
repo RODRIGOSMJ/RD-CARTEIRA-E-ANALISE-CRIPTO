@@ -101,7 +101,7 @@ export function formatTriggerTelegramHtml(
     minute: '2-digit',
   });
   const lines = [
-    `<b>SinalCripto IA — Gatilho Disparado (24h)</b>`,
+    `<b>RD Crypto — Gatilho Disparado (24h)</b>`,
     ``,
     `<b>Ativo:</b> ${escapeTelegramHtml(trigger.name)} (${escapeTelegramHtml(trigger.symbol)})`,
     `<b>Condição:</b> ${escapeTelegramHtml(describeCondition(trigger, actualMovePct))}`,
@@ -133,7 +133,7 @@ export function formatAiAlertsTelegramHtml(
   alerts: SignalAlert[],
   usdBrlRate: number
 ): string {
-  const header = `<b>SinalCripto IA — Novo Sinal Automático</b>`;
+  const header = `<b>RD Crypto — Novo Sinal Automático</b>`;
   const blocks = alerts.map((a) => {
     const verdictLabel = getVerdictBadgeMeta(a.action, { headline: a.headline }).label;
     return [

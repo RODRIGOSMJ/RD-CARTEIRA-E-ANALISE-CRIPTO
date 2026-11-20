@@ -53,7 +53,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const testHtml =
-      '<b>SinalCripto IA — Teste de Conexão 24h</b>\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
+      '<b>RD Crypto — Teste de Conexão 24h</b>\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
 
     const upstream = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',

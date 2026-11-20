@@ -495,7 +495,7 @@ async function startServer() {
         ...bodyWa,
       };
       const testText =
-        '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
+        '*RD Crypto — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
       const result = await sendWhatsAppMessage(merged, testText, { type: 'whatsapp_test' });
       if (!result.ok) {
         return res.status(400).json({ error: result.error || 'Falha ao enviar mensagem de teste.' });
@@ -516,7 +516,7 @@ async function startServer() {
         ...bodyTg,
       };
       const testHtml =
-        '<b>SinalCripto IA — Teste de Conexão 24h</b>\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
+        '<b>RD Crypto — Teste de Conexão 24h</b>\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
       const result = await sendTelegramMessage(merged, testHtml, { isPreformattedHtml: true });
       if (!result.ok) {
         return res.status(400).json({ error: result.error || 'Falha ao enviar teste no Telegram.' });
@@ -559,7 +559,7 @@ async function startServer() {
           priceAtSignalUsd: 90000,
           targetPriceUsd: 95000,
           stopLossUsd: 87000,
-          headline: 'Teste de integração de alertas automáticos do SinalCripto IA',
+          headline: 'Teste de integração de alertas automáticos do RD Crypto',
           reason: 'Mensagem de verificação enviada pelo painel de configurações.',
           createdAt: new Date().toISOString(),
           read: true,
@@ -1281,7 +1281,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`SinalCripto IA rodando em http://0.0.0.0:${PORT}`);
+    console.log(`RD Crypto rodando em http://0.0.0.0:${PORT}`);
     scheduleNextStudyTimer();
 
     const store = getStore();

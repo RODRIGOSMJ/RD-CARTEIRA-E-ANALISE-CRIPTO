@@ -1872,7 +1872,7 @@ export default function App() {
             onClick={() => setActiveTab('painel')}
             className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
           >
-            SinalCripto IA
+            RD Crypto
           </button>
 
           {/* Right Corner: Cloud sync + Theme toggle + PWA Install + Study CTA + Unified Corner Menu */}
@@ -3664,7 +3664,7 @@ export default function App() {
       <footer className="border-t border-slate-200 dark:border-white/[0.06] py-5 px-4 sm:px-6">
         <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600 dark:text-slate-500">
           <span>
-            SinalCripto IA — Análises geradas por inteligência artificial com dados de mercado em tempo real para fins informativos e educacionais. Não constitui recomendação financeira oficial.
+            RD Crypto — Análises geradas por inteligência artificial com dados de mercado em tempo real para fins informativos e educacionais. Não constitui recomendação financeira oficial.
           </span>
           {state && (
             <div

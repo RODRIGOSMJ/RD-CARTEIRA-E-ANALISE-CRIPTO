@@ -334,7 +334,7 @@ export function PortfolioView({
               Monte sua carteira para o robô estudar junto com você
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              Adicione suas compras, vendas ou ganhos de staking/airdrop. O SinalCripto IA calculará seu preço médio, lucro real e passará a indicar quando realizar lucro ou segurar com base na sua posição.
+              Adicione suas compras, vendas ou ganhos de staking/airdrop. O RD Crypto calculará seu preço médio, lucro real e passará a indicar quando realizar lucro ou segurar com base na sua posição.
             </p>
           </div>
           <button

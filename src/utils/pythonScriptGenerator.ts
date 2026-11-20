@@ -150,7 +150,7 @@ export function generateMonitorPythonScript(input: PythonGeneratorInput): string
 
   return `#!/usr/bin/env python3
 """
-RG Crypto AI Copilot — Monitor 24/7 + Resumo Diário & Notícias (GitHub Actions)
+RD Crypto — Monitor 24/7 + Resumo Diário & Notícias (GitHub Actions)
 - Vertente 1: Alertas em tempo real (gatilhos 24h + oscilações da carteira)
 - Vertente 2: Resumo Diário da Manhã com Índice Fear & Greed, macro global,
   notícias de impacto e análise executiva via Gemini API (com fallback automático).
@@ -411,7 +411,7 @@ def generate_gemini_executive_summary(
 
     headlines = [f"- {n['title']} ({n['source']})" for n in news_items[:5]]
     prompt = (
-        "Você é o analista chefe do RG Crypto AI Copilot (foco em proteção de patrimônio e HODL).\\n"
+        "Você é o analista chefe do RD Crypto (foco em proteção de patrimônio e HODL).\\n"
         "Escreva um Resumo Executivo Diário curto (máximo 4 tópicos objetivos em português) "
         "com base nos dados reais abaixo. Não use hashtags e nunca recomende vender no prejuízo.\\n\\n"
         f"Fear & Greed Index: {fng['value']}/100 ({fng['classification']}, delta {fng['delta']:+d})\\n"
@@ -703,7 +703,7 @@ def build_daily_summary_messages(
         exec_source_label = "Resumo Quantitativo de Mercado"
 
     md_sections = [
-        f"☀️ *RG Crypto AI Copilot — Resumo Diário da Manhã*",
+        f"☀️ *RD Crypto — Resumo Diário da Manhã*",
         f"_{escape_md(date_label)}_",
         "",
         f"*1. Sentimento & Macro Global*",
@@ -721,7 +721,7 @@ def build_daily_summary_messages(
     ]
 
     plain_sections = [
-        f"*RG Crypto AI Copilot — Resumo Diário da Manhã ({date_label})*",
+        f"*RD Crypto — Resumo Diário da Manhã ({date_label})*",
         f"Fear & Greed: {fng['value']}/100 ({fng['classification']})",
         "",
         exec_plain,
@@ -839,12 +839,12 @@ def main() -> int:
 
     if alert_lines_md:
         msg_md = (
-            "🚨 *RG Crypto AI Copilot — Alerta em Tempo Real*\\n"
+            "🚨 *RD Crypto — Alerta em Tempo Real*\\n"
             f"_{escape_md(now_utc)}_\\n\\n"
             + "\\n\\n".join(alert_lines_md)
         )
         msg_plain = (
-            f"*RG Crypto AI Copilot — Alerta 24h ({now_utc})*\\n\\n"
+            f"*RD Crypto — Alerta 24h ({now_utc})*\\n\\n"
             + "\\n\\n".join(alert_lines_plain)
         )
         if not dispatch_message(msg_md, msg_plain):
@@ -886,7 +886,7 @@ export function generateGitHubWorkflowYaml(
     ? `\n          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}`
     : '';
 
-  return `name: RG Crypto AI Copilot - Monitor 24h & Resumo Diário
+  return `name: RD Crypto - Monitor 24h & Resumo Diário
 
 on:
   schedule:

@@ -1002,7 +1002,7 @@ export function evaluateCloudAlertsAndTriggers(
           });
 
           if (wantWhatsApp && waReady) {
-            const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}${trig.note ? `\nObs: ${trig.note}` : ''}`;
+            const msg = `*RD Crypto — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}${trig.note ? `\nObs: ${trig.note}` : ''}`;
             pendingWhatsApps.push({
               triggerId: trig.id,
               text: msg,
@@ -1011,7 +1011,7 @@ export function evaluateCloudAlertsAndTriggers(
           }
 
           if (wantTelegram && tgReady) {
-            const msg = `*SinalCripto IA — Gatilho Disparado (24h)*\nAtivo: ${trig.name} (${trig.symbol})\nPreço atual: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção planejada: ${trig.actionHint}${trig.note ? `\nObservação: ${trig.note}` : ''}`;
+            const msg = `*RD Crypto — Gatilho Disparado (24h)*\nAtivo: ${trig.name} (${trig.symbol})\nPreço atual: US$ ${price.toFixed(4)} (R$ ${(price * params.usdBrlRate).toFixed(2)})\nAção planejada: ${trig.actionHint}${trig.note ? `\nObservação: ${trig.note}` : ''}`;
             pendingTelegrams.push({
               triggerId: trig.id,
               text: msg,
@@ -1248,7 +1248,7 @@ async function sendLocalWhatsAppMessage(
           phone: phoneDigits || undefined,
           text,
           message: text,
-          source: 'SinalCripto IA',
+          source: 'RD Crypto',
           metadata,
         }),
       });
@@ -1385,13 +1385,13 @@ async function evaluateLocalPriceTriggers(
       const sentChannels: string[] = [];
       const errors: string[] = [];
       if (trig.sendWhatsApp && store.settings.whatsapp.enabled) {
-        const msg = `*SinalCripto IA — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}${trig.note ? `\nObs: ${trig.note}` : ''}`;
+        const msg = `*RD Crypto — Gatilho Disparado*\nAtivo: ${trig.name} (${trig.symbol})\nPreço: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção: ${trig.actionHint}${trig.note ? `\nObs: ${trig.note}` : ''}`;
         const r = await sendLocalWhatsAppMessage(store.settings.whatsapp, msg, { trig });
         if (r.ok) sentChannels.push('WhatsApp');
         else errors.push(`WhatsApp: ${r.error || 'Falha'}`);
       }
       if (trig.sendTelegram && store.settings.telegram?.enabled) {
-        const tgMsg = `*SinalCripto IA — Gatilho Disparado (24h)*\nAtivo: ${trig.name} (${trig.symbol})\nPreço atual: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção planejada: ${trig.actionHint}${trig.note ? `\nObservação: ${trig.note}` : ''}`;
+        const tgMsg = `*RD Crypto — Gatilho Disparado (24h)*\nAtivo: ${trig.name} (${trig.symbol})\nPreço atual: US$ ${price.toFixed(4)} (R$ ${(price * usdBrlRate).toFixed(2)})\nAção planejada: ${trig.actionHint}${trig.note ? `\nObservação: ${trig.note}` : ''}`;
         const tr = await sendLocalTelegramMessage(store.settings.telegram, tgMsg);
         if (tr.ok) sentChannels.push('Telegram');
         else errors.push(`Telegram: ${tr.error || 'Falha'}`);
@@ -1753,7 +1753,7 @@ export async function apiTestTelegram(telegram: TelegramSettings): Promise<void>
   }
   const r = await sendLocalTelegramMessage(
     telegram,
-    '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos e sinais da IA.'
+    '*RD Crypto — Teste de Conexão 24h*\n\nSeu Telegram está conectado e pronto para receber automaticamente seus gatilhos e sinais da IA.'
   );
   if (!r.ok) {
     throw new Error(r.error || 'Falha ao enviar teste no Telegram.');
@@ -2305,7 +2305,7 @@ export async function apiTestWhatsApp(
 
   const r = await sendLocalWhatsAppMessage(
     whatsapp,
-    '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos e sinais da IA.'
+    '*RD Crypto — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos e sinais da IA.'
   );
   if (!r.ok) {
     throw new Error(r.error || 'Falha ao enviar teste para o WhatsApp.');
@@ -2327,7 +2327,7 @@ export async function apiTestWebhook(webhookUrl: string): Promise<void> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: '**SinalCripto IA** — Teste de integração de alertas automáticos.',
+          content: '**RD Crypto** — Teste de integração de alertas automáticos.',
         }),
       });
       if (!res.ok) {

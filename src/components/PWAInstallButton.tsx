@@ -65,12 +65,12 @@ export function PWAInstallButton() {
               <div className="flex items-center gap-3">
                 <img
                   src="/pwa-192x192.png"
-                  alt="SinalCripto IA"
+                  alt="RD Crypto"
                   className="w-9 h-9 rounded-lg border border-slate-200 dark:border-white/10 shrink-0"
                 />
                 <div>
                   <h2 id="pwa-install-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    Instalar SinalCripto IA
+                    Instalar RD Crypto
                   </h2>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
                     Use como aplicativo no celular, tablet ou computador
@@ -152,7 +152,7 @@ export function PWAInstallButton() {
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-300">
                     No <strong className="text-slate-900 dark:text-slate-100">Chrome</strong> ou <strong className="text-slate-900 dark:text-slate-100">Edge</strong>, clique no ícone de instalação{' '}
-                    <strong className="text-slate-900 dark:text-slate-100">Instalar SinalCripto IA</strong> no canto direito da barra de endereços (ou no menu ⋮ → Salvar e compartilhar).
+                    <strong className="text-slate-900 dark:text-slate-100">Instalar RD Crypto</strong> no canto direito da barra de endereços (ou no menu ⋮ → Salvar e compartilhar).
                   </p>
                 </div>
               </div>

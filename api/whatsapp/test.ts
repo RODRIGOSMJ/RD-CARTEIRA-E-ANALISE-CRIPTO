@@ -68,7 +68,7 @@ export default async function handler(req: any, res: any) {
     const provider = wa.provider || 'callmebot';
     const phoneDigits = normalizePhone(wa.phoneNumber || '');
     const testText =
-      '*SinalCripto IA — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
+      '*RD Crypto — Teste de Conexão 24h*\n\nSeu WhatsApp está conectado e pronto para receber automaticamente seus gatilhos de queda, alta e sinais da IA 24 horas por dia.';
 
     if (provider === 'callmebot') {
       if (phoneDigits.length < 11) {
@@ -133,7 +133,7 @@ export default async function handler(req: any, res: any) {
           text: testText,
           message: testText,
           textMessage: { text: testText },
-          source: 'SinalCripto IA',
+          source: 'RD Crypto',
           metadata: { type: 'whatsapp_test' },
         }),
         signal: AbortSignal.timeout(10_000),
