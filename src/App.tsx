@@ -73,6 +73,7 @@ import {
   apiFetchSnapshotsForAssets,
   apiGetCoinPrice,
   apiGetState,
+  apiGetUsdBrlRate,
   apiMarkAlertsRead,
   apiRemoveWatchlist,
   apiRenamePortfolio,
@@ -248,6 +249,7 @@ export default function App() {
   const [countdownLabel, setCountdownLabel] = useState<string>('');
   const [streamConnected, setStreamConnected] = useState(false);
   const [lastMarketUpdateAt, setLastMarketUpdateAt] = useState<number>(() => Date.now());
+  const [lastUsdBrlUpdateAt, setLastUsdBrlUpdateAt] = useState<number>(() => Date.now());
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
 
@@ -256,9 +258,9 @@ export default function App() {
   const localStateRef = useRef<AppStatePayload | null>(null);
   const cloudDataRef = useRef<CloudWorkspaceData | null>(null);
   const cloudSnapshotsRef = useRef<Record<string, MarketSnapshot>>({});
-  const cloudUsdBrlRef = useRef<number>(5.75);
+  const cloudUsdBrlRef = useRef<number>(5.94);
   const settingsRef = useRef<AppSettings | null>(null);
-  const usdBrlRef = useRef<number>(5.75);
+  const usdBrlRef = useRef<number>(5.94);
   const soundEnabledRef = useRef<boolean>(soundEnabled);
   const lastMarketTickAtRef = useRef<number>(0);
   const triggerDispatchLockRef = useRef<Map<string, number>>(new Map());
@@ -515,7 +517,11 @@ export default function App() {
       const nowTs = Date.now();
       lastMarketTickAtRef.current = nowTs;
       setLastMarketUpdateAt(nowTs);
+      setLastUsdBrlUpdateAt(nowTs);
       setLocalState(data);
+      if (Number.isFinite(data.usdBrlRate) && data.usdBrlRate > 1) {
+        setCloudUsdBrlRate(data.usdBrlRate);
+      }
       setError(null);
       if (getBackendMode() === 'local') {
         setStreamConnected(true);
@@ -564,6 +570,7 @@ export default function App() {
         const nowTs = Date.now();
         lastMarketTickAtRef.current = nowTs;
         setLastMarketUpdateAt(nowTs);
+        setLastUsdBrlUpdateAt(nowTs);
         setStreamConnected(true);
         setLocalState((prev) =>
           prev
@@ -711,6 +718,12 @@ export default function App() {
       });
 
       if (trackedAssets.length === 0) {
+        const liveUsdBrl = await apiGetUsdBrlRate(true);
+        const nowTs = Date.now();
+        lastMarketTickAtRef.current = nowTs;
+        setLastMarketUpdateAt(nowTs);
+        setLastUsdBrlUpdateAt(nowTs);
+        setCloudUsdBrlRate(liveUsdBrl);
         setStreamConnected(true);
         return;
       }
@@ -719,6 +732,7 @@ export default function App() {
       const nowTs = Date.now();
       lastMarketTickAtRef.current = nowTs;
       setLastMarketUpdateAt(nowTs);
+      setLastUsdBrlUpdateAt(nowTs);
       setCloudSnapshots(snapshots);
       setCloudUsdBrlRate(usdBrlRate);
       setStreamConnected(true);
@@ -829,6 +843,7 @@ export default function App() {
         const nowTs = Date.now();
         lastMarketTickAtRef.current = nowTs;
         setLastMarketUpdateAt(nowTs);
+        setLastUsdBrlUpdateAt(nowTs);
         setStreamConnected(true);
         setLocalState((prev) =>
           prev
@@ -939,6 +954,7 @@ export default function App() {
         const nowTs = Date.now();
         lastMarketTickAtRef.current = nowTs;
         setLastMarketUpdateAt(nowTs);
+        setLastUsdBrlUpdateAt(nowTs);
         setStreamConnected(true);
         setLocalState((prev) =>
           prev
@@ -960,7 +976,30 @@ export default function App() {
       }
     }, 5_000);
 
-    return () => clearInterval(timer);
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        if (cloudUser && cloudDataRef.current) {
+          void refreshCloudMarketTick();
+        } else {
+          void apiGetUsdBrlRate(true)
+            .then((rate) => {
+              if (Number.isFinite(rate) && rate > 1) {
+                setLastUsdBrlUpdateAt(Date.now());
+                setLocalState((prev) => (prev ? { ...prev, usdBrlRate: rate } : prev));
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
   }, [loading, cloudUser, refreshCloudMarketTick]);
 
   // Countdown timer for next automatic AI study
@@ -3628,9 +3667,31 @@ export default function App() {
             SinalCripto IA — Análises geradas por inteligência artificial com dados de mercado em tempo real para fins informativos e educacionais. Não constitui recomendação financeira oficial.
           </span>
           {state && (
-            <span className="font-mono tabular-nums">
-              USD/BRL R$ {state.usdBrlRate.toFixed(2)}
-            </span>
+            <div
+              className="inline-flex items-center gap-2 font-mono tabular-nums text-slate-700 dark:text-slate-300"
+              title={`Cotação comercial USD/BRL atualizada automaticamente a cada 5s (última atualização: ${new Date(
+                lastUsdBrlUpdateAt
+              ).toLocaleTimeString('pt-BR')})`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>
+                  USD/BRL R${' '}
+                  {state.usdBrlRate.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 4,
+                    maximumFractionDigits: 4,
+                  })}
+                </span>
+              </span>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                ·{' '}
+                {new Date(lastUsdBrlUpdateAt).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                })}
+              </span>
+            </div>
           )}
         </div>
       </footer>

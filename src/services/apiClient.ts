@@ -58,7 +58,7 @@ export function getBackendMode(): ClientBackendMode {
 async function safeFetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { cache: 'no-store', ...init });
   } catch {
     throw new BackendUnavailableError('Falha de rede ao acessar a API');
   }
@@ -196,46 +196,98 @@ interface CachedSeries {
 
 const localSeriesCache = new Map<string, CachedSeries>();
 const localSnapshotCache = new Map<string, { data: MarketSnapshot; fetchedAt: number }>();
-let localUsdBrl = { rate: 5.75, fetchedAt: 0 };
+let localUsdBrl = { rate: 5.94, fetchedAt: 0 };
+const LOCAL_USD_BRL_TTL_MS = 5_000;
+let inFlightLocalUsdBrl: Promise<number> | null = null;
 
-async function fetchLocalUsdBrl(): Promise<number> {
-  if (Date.now() - localUsdBrl.fetchedAt < 5 * 60_000) {
+async function fetchLocalUsdBrl(forceRefresh = false): Promise<number> {
+  if (!forceRefresh && localUsdBrl.fetchedAt > 0 && Date.now() - localUsdBrl.fetchedAt < LOCAL_USD_BRL_TTL_MS) {
     return localUsdBrl.rate;
   }
 
-  try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD', {
-      signal: AbortSignal.timeout(4500),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as { rates?: { BRL?: number } };
-      const p = Number(json?.rates?.BRL);
-      if (Number.isFinite(p) && p > 1) {
-        localUsdBrl = { rate: p, fetchedAt: Date.now() };
-        return p;
-      }
-    }
-  } catch {
-    // fallback
+  if (inFlightLocalUsdBrl) {
+    return inFlightLocalUsdBrl;
   }
 
-  try {
-    const res = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as { USDBRL?: { bid?: string } };
-      const p = Number(json?.USDBRL?.bid);
-      if (Number.isFinite(p) && p > 1) {
-        localUsdBrl = { rate: p, fetchedAt: Date.now() };
-        return p;
+  inFlightLocalUsdBrl = (async () => {
+    // 1. Coinbase live USD->BRL exchange rate (CORS-enabled & real-time)
+    try {
+      const res = await fetch(`https://api.coinbase.com/v2/exchange-rates?currency=USD&_t=${Date.now()}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4500),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { data?: { rates?: { BRL?: string } } };
+        const p = Number(json?.data?.rates?.BRL);
+        if (Number.isFinite(p) && p > 1) {
+          localUsdBrl = { rate: p, fetchedAt: Date.now() };
+          return p;
+        }
       }
+    } catch {
+      // fallback
     }
-  } catch {
-    // keep cached
-  }
 
-  return localUsdBrl.rate;
+    // 2. AwesomeAPI live USD-BRL
+    try {
+      const res = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { USDBRL?: { bid?: string } };
+        const p = Number(json?.USDBRL?.bid);
+        if (Number.isFinite(p) && p > 1) {
+          localUsdBrl = { rate: p, fetchedAt: Date.now() };
+          return p;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    // 3. Frankfurter (ECB reference)
+    try {
+      const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { rates?: { BRL?: number } };
+        const p = Number(json?.rates?.BRL);
+        if (Number.isFinite(p) && p > 1) {
+          localUsdBrl = { rate: p, fetchedAt: Date.now() };
+          return p;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    // 4. Open ER API (daily fallback)
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4500),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { rates?: { BRL?: number } };
+        const p = Number(json?.rates?.BRL);
+        if (Number.isFinite(p) && p > 1) {
+          localUsdBrl = { rate: p, fetchedAt: Date.now() };
+          return p;
+        }
+      }
+    } catch {
+      // keep cached
+    }
+
+    return localUsdBrl.rate;
+  })().finally(() => {
+    inFlightLocalUsdBrl = null;
+  });
+
+  return inFlightLocalUsdBrl;
 }
 
 async function fetchLocalBinance24hr(symbols: string[]): Promise<Map<string, any>> {
@@ -1364,7 +1416,7 @@ async function buildLocalStatePayload(forceRefresh = false): Promise<AppStatePay
   const tracked = getLocalTrackedAssets(store);
   const [snapshots, usdBrlRate] = await Promise.all([
     fetchLocalMarketSnapshots(tracked, forceRefresh),
-    fetchLocalUsdBrl(),
+    fetchLocalUsdBrl(forceRefresh),
   ]);
   evaluateLocalAlerts(store, snapshots);
   if (forceRefresh) {
@@ -1525,6 +1577,19 @@ export async function apiGetState(forceRefresh = false): Promise<AppStatePayload
   };
 }
 
+export async function apiGetUsdBrlRate(forceRefresh = false): Promise<number> {
+  return withFallback(
+    async () => {
+      const res = await safeFetchJson<{ usdBrlRate: number }>(
+        `/api/market/usd-brl${forceRefresh ? '?refresh=1' : ''}`,
+        { cache: 'no-store' }
+      );
+      return Number(res.usdBrlRate) || localUsdBrl.rate;
+    },
+    () => fetchLocalUsdBrl(forceRefresh)
+  );
+}
+
 export async function apiFetchSnapshotsForAssets(
   assets: WatchlistAsset[],
   forceRefresh = false
@@ -1535,6 +1600,7 @@ export async function apiFetchSnapshotsForAssets(
         '/api/market/snapshots',
         {
           method: 'POST',
+          cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ assets, forceRefresh }),
         }
@@ -1542,7 +1608,7 @@ export async function apiFetchSnapshotsForAssets(
     async () => {
       const [snapshots, usdBrlRate] = await Promise.all([
         fetchLocalMarketSnapshots(assets, forceRefresh),
-        fetchLocalUsdBrl(),
+        fetchLocalUsdBrl(forceRefresh),
       ]);
       return { snapshots, usdBrlRate };
     }

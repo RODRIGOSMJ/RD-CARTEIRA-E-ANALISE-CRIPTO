@@ -104,7 +104,7 @@ async function startServer() {
     const trackedAssets = getTrackedMarketAssets();
     const [snapshots, usdBrlRate] = await Promise.all([
       fetchMarketSnapshots(trackedAssets, forceMarketRefresh),
-      getUsdBrlRate(),
+      getUsdBrlRate(forceMarketRefresh),
     ]);
     evaluatePastAlerts(snapshots);
     if (forceMarketRefresh) {
@@ -204,16 +204,18 @@ async function startServer() {
     if (sseClients.size === 0 && !hasActiveTriggers) return;
     try {
       const trackedAssets = getTrackedMarketAssets();
-      if (trackedAssets.length === 0) return;
       const [snapshots, usdBrlRate] = await Promise.all([
-        fetchMarketSnapshots(trackedAssets, true),
-        getUsdBrlRate(),
+        trackedAssets.length > 0 ? fetchMarketSnapshots(trackedAssets, true) : Promise.resolve({}),
+        getUsdBrlRate(true),
       ]);
-      evaluatePastAlerts(snapshots);
+      if (trackedAssets.length > 0) {
+        evaluatePastAlerts(snapshots);
+      }
       const isCloudClientActive = Date.now() < clientCloudActiveUntil;
-      const { triggeredAlerts } = isCloudClientActive
-        ? { triggeredAlerts: [] }
-        : await evaluatePriceTriggers(snapshots, usdBrlRate);
+      const { triggeredAlerts } =
+        isCloudClientActive || trackedAssets.length === 0
+          ? { triggeredAlerts: [] }
+          : await evaluatePriceTriggers(snapshots, usdBrlRate);
 
       if (sseClients.size > 0) {
         broadcastSSE('market_tick', {
@@ -241,6 +243,7 @@ async function startServer() {
     try {
       const forceRefresh = req.query.refresh === '1';
       const payload = await buildStatePayload(forceRefresh);
+      res.setHeader('Cache-Control', 'no-store');
       res.json(payload);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao carregar estado do mercado.' });
@@ -1045,14 +1048,26 @@ async function startServer() {
   });
 
   // Multi-device Cloud Sync helper routes (stateless market, history, AI study & WhatsApp relay)
+  app.get('/api/market/usd-brl', async (req, res) => {
+    try {
+      const forceRefresh = req.query.refresh === '1';
+      const usdBrlRate = await getUsdBrlRate(forceRefresh);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ usdBrlRate, updatedAt: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao consultar cotação do dólar.' });
+    }
+  });
+
   app.post('/api/market/snapshots', async (req, res) => {
     try {
       const assets = Array.isArray(req.body?.assets) ? (req.body.assets as WatchlistAsset[]) : [];
       const forceRefresh = Boolean(req.body?.forceRefresh);
       const [snapshots, usdBrlRate] = await Promise.all([
         fetchMarketSnapshots(assets, forceRefresh),
-        getUsdBrlRate(),
+        getUsdBrlRate(forceRefresh),
       ]);
+      res.setHeader('Cache-Control', 'no-store');
       res.json({ snapshots, usdBrlRate });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Erro ao buscar cotações ao vivo.' });

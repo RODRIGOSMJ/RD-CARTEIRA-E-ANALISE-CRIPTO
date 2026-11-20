@@ -19,62 +19,121 @@ let cachedUsdBrl = { rate: 5.75, fetchedAt: 0 };
 
 const SNAPSHOT_TTL_MS = 4_500;
 const SERIES_TTL_MS = 60_000;
+const USD_BRL_TTL_MS = 5_000;
+let inFlightUsdBrlPromise: Promise<number> | null = null;
 
-export async function getUsdBrlRate(): Promise<number> {
-  if (Date.now() - cachedUsdBrl.fetchedAt < 10 * 60_000) {
+export async function getUsdBrlRate(forceRefresh = false): Promise<number> {
+  if (!forceRefresh && cachedUsdBrl.fetchedAt > 0 && Date.now() - cachedUsdBrl.fetchedAt < USD_BRL_TTL_MS) {
     return cachedUsdBrl.rate;
   }
 
-  try {
-    const res = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as { USDBRL?: { bid?: string } };
-      const parsed = Number(json?.USDBRL?.bid);
-      if (Number.isFinite(parsed) && parsed > 1) {
-        cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
-        return parsed;
-      }
-    }
-  } catch {
-    // Fallback to CoinGecko tether/brl
+  if (inFlightUsdBrlPromise) {
+    return inFlightUsdBrlPromise;
   }
 
-  try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD', {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as { rates?: { BRL?: number } };
-      const parsed = Number(json?.rates?.BRL);
-      if (Number.isFinite(parsed) && parsed > 1) {
-        cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
-        return parsed;
+  inFlightUsdBrlPromise = (async () => {
+    // 1. Yahoo Finance Real-Time FX (BRL=X) — tick-by-tick market rate
+    try {
+      const res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/BRL=X?interval=1m&range=1d&_t=${Date.now()}`,
+        {
+          cache: 'no-store',
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(4000),
+        }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as {
+          chart?: { result?: Array<{ meta?: { regularMarketPrice?: number } }> };
+        };
+        const parsed = Number(json?.chart?.result?.[0]?.meta?.regularMarketPrice);
+        if (Number.isFinite(parsed) && parsed > 1) {
+          cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
+          return parsed;
+        }
       }
+    } catch {
+      // Fallback to Coinbase
     }
-  } catch {
-    // Fallback to CoinGecko tether/brl
-  }
 
-  try {
-    const res = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=brl',
-      { signal: AbortSignal.timeout(4000) }
-    );
-    if (res.ok) {
-      const json = (await res.json()) as { tether?: { brl?: number } };
-      const parsed = Number(json?.tether?.brl);
-      if (Number.isFinite(parsed) && parsed > 1) {
-        cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
-        return parsed;
+    // 2. Coinbase live exchange rates (USD -> BRL)
+    try {
+      const res = await fetch(`https://api.coinbase.com/v2/exchange-rates?currency=USD&_t=${Date.now()}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { data?: { rates?: { BRL?: string } } };
+        const parsed = Number(json?.data?.rates?.BRL);
+        if (Number.isFinite(parsed) && parsed > 1) {
+          cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
+          return parsed;
+        }
       }
+    } catch {
+      // Fallback to AwesomeAPI
     }
-  } catch {
-    // keep cached
-  }
 
-  return cachedUsdBrl.rate;
+    // 3. AwesomeAPI USD-BRL (live commercial dollar)
+    try {
+      const res = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { USDBRL?: { bid?: string } };
+        const parsed = Number(json?.USDBRL?.bid);
+        if (Number.isFinite(parsed) && parsed > 1) {
+          cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback to Frankfurter / Open ER API
+    }
+
+    // 4. Frankfurter (ECB reference)
+    try {
+      const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { rates?: { BRL?: number } };
+        const parsed = Number(json?.rates?.BRL);
+        if (Number.isFinite(parsed) && parsed > 1) {
+          cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback to Open ER API
+    }
+
+    // 5. Open ER API (last resort)
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { rates?: { BRL?: number } };
+        const parsed = Number(json?.rates?.BRL);
+        if (Number.isFinite(parsed) && parsed > 1) {
+          cachedUsdBrl = { rate: parsed, fetchedAt: Date.now() };
+          return parsed;
+        }
+      }
+    } catch {
+      // keep cached
+    }
+
+    return cachedUsdBrl.rate;
+  })().finally(() => {
+    inFlightUsdBrlPromise = null;
+  });
+
+  return inFlightUsdBrlPromise;
 }
 
 async function fetchBinance24hr(symbols: string[]): Promise<Map<string, any>> {
