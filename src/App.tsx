@@ -2420,70 +2420,72 @@ export default function App() {
           </div>
         ) : state ? (
           <>
-            {/* 4-column Summary KPI Strip */}
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
-                <span className="block text-xs text-slate-600 dark:text-slate-400">Ativos monitorados</span>
-                <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                    {state.watchlist.length}
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
-                    {counts.hold} em espera
-                  </span>
+            {/* 4-column Summary KPI Strip (only on Painel Principal) */}
+            {activeTab === 'painel' && (
+              <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">Ativos monitorados</span>
+                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                      {state.watchlist.length}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
+                      {counts.hold} em espera
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
-                <span className="block text-xs text-slate-600 dark:text-slate-400">Sinais de compra</span>
-                <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
-                    {counts.buy}
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                    {state.watchlist
-                      .filter((w) => protectedAnalyses[w.id]?.action === 'COMPRAR')
-                      .map((w) => w.symbol)
-                      .slice(0, 4)
-                      .join(', ') || 'Nenhum momento'}
-                  </span>
+                <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">Sinais de compra</span>
+                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-mono font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                      {counts.buy}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                      {state.watchlist
+                        .filter((w) => protectedAnalyses[w.id]?.action === 'COMPRAR')
+                        .map((w) => w.symbol)
+                        .slice(0, 4)
+                        .join(', ') || 'Nenhum momento'}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
-                <span className="block text-xs text-slate-600 dark:text-slate-400">Sinais de venda</span>
-                <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-rose-700 dark:text-rose-400 tabular-nums">
-                    {counts.sell}
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                    {state.watchlist
-                      .filter((w) => protectedAnalyses[w.id]?.action === 'VENDER')
-                      .map((w) => w.symbol)
-                      .slice(0, 4)
-                      .join(', ') || 'Nenhum momento'}
-                  </span>
+                <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">Sinais de venda</span>
+                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-mono font-bold text-rose-700 dark:text-rose-400 tabular-nums">
+                      {counts.sell}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                      {state.watchlist
+                        .filter((w) => protectedAnalyses[w.id]?.action === 'VENDER')
+                        .map((w) => w.symbol)
+                        .slice(0, 4)
+                        .join(', ') || 'Nenhum momento'}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
-                <span className="block text-xs text-slate-600 dark:text-slate-400">
-                  Precisão avaliada pela IA
-                </span>
-                <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                    {state.accuracyStats.accuracyPct !== null
-                      ? `${state.accuracyStats.accuracyPct}%`
-                      : 'Inicial'}
+                <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-4">
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">
+                    Precisão avaliada pela IA
                   </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
-                    {state.accuracyStats.totalEvaluated > 0
-                      ? `${state.accuracyStats.hits}/${state.accuracyStats.totalEvaluated} sinais`
-                      : `${state.studyHistory.length} ciclos`}
-                  </span>
+                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                      {state.accuracyStats.accuracyPct !== null
+                        ? `${state.accuracyStats.accuracyPct}%`
+                        : 'Inicial'}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-mono tabular-nums">
+                      {state.accuracyStats.totalEvaluated > 0
+                        ? `${state.accuracyStats.hits}/${state.accuracyStats.totalEvaluated} sinais`
+                        : `${state.studyHistory.length} ciclos`}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* VIEW 1: PAINEL PRINCIPAL */}
             {activeTab === 'painel' && (
