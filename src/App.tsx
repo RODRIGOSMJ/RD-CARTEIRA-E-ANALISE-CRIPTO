@@ -1862,18 +1862,46 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-[#0B0F17] dark:text-slate-100 transition-colors">
-      {/* Clean Top Bar with Unified Corner Navigation Menu */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-white/[0.08] bg-white/95 dark:bg-[#0B0F17]/95 backdrop-blur-md">
-        <div className="max-w-[1440px] mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
-          {/* Left: Brand wordmark */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('painel')}
-            className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
-          >
-            RD Crypto
-          </button>
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50/85 via-sky-50/55 to-teal-50/45 dark:from-[#060B16]/95 dark:via-[#0B1629]/95 dark:to-[#071D2B]/95 text-slate-900 dark:text-slate-100 transition-colors">
+      {/* Clean Top Bar with Gradient Surface, Live USD/BRL Rate & Corner Navigation Menu */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-sky-400/15 bg-gradient-to-r from-white/90 via-sky-50/85 to-teal-50/80 dark:from-[#070E1C]/90 dark:via-[#0D1A30]/90 dark:to-[#081C2B]/90 backdrop-blur-xl">
+        <div className="max-w-[1440px] mx-auto px-2.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Left: Brand wordmark + Live USD/BRL quote */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('painel')}
+              className="text-base sm:text-lg font-extrabold tracking-tight bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-600 dark:from-sky-300 dark:via-cyan-300 dark:to-emerald-300 bg-clip-text text-transparent whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
+            >
+              RD Crypto
+            </button>
+
+            {state && (
+              <div
+                className="flex items-center gap-1.5 text-[11px] sm:text-xs font-mono tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap shrink-0"
+                title={`Dólar comercial USD/BRL atualizado automaticamente (última leitura: ${new Date(
+                  lastUsdBrlUpdateAt
+                ).toLocaleTimeString('pt-BR')})`}
+              >
+                <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
+                  ·
+                </span>
+                <span className="text-slate-500 dark:text-slate-400 hidden sm:inline">
+                  USD/BRL
+                </span>
+                <span className="text-slate-500 dark:text-slate-400 sm:hidden">
+                  USD
+                </span>
+                <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                  R${' '}
+                  {state.usdBrlRate.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 4,
+                    maximumFractionDigits: 4,
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Right Corner: Cloud sync + Theme toggle + PWA Install + Study CTA + Unified Corner Menu */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -1978,7 +2006,7 @@ export default function App() {
                   : 'Executar estudo completo agora'
               }
               onClick={() => handleRunStudy()}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-semibold rounded-lg bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-600 hover:from-sky-500 hover:via-cyan-500 hover:to-teal-500 text-white transition-all disabled:opacity-50 whitespace-nowrap shrink-0 shadow-sm shadow-sky-500/20"
             >
               {state?.isStudying ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1989,8 +2017,8 @@ export default function App() {
                 <span>Estudando...</span>
               ) : (
                 <>
-                  <span className="sm:hidden">Estudar</span>
                   <span className="hidden sm:inline">Estudar agora</span>
+                  <span className="sm:hidden">Estudar</span>
                 </>
               )}
             </button>
@@ -2002,13 +2030,13 @@ export default function App() {
                 onClick={() => setNavMenuOpen((prev) => !prev)}
                 aria-expanded={navMenuOpen}
                 aria-label="Abrir menu de navegação"
-                className={`relative inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
+                className={`relative inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-semibold rounded-lg border transition-all whitespace-nowrap shrink-0 ${
                   navMenuOpen
-                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300'
-                    : 'border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
+                    ? 'border-sky-500 bg-gradient-to-r from-sky-50 to-cyan-50 dark:from-sky-500/20 dark:to-teal-500/20 text-sky-700 dark:text-sky-200'
+                    : 'border-slate-300/90 dark:border-sky-400/20 bg-white/85 dark:bg-[#0F1B30]/85 hover:bg-slate-100 dark:hover:bg-[#13223B] text-slate-800 dark:text-slate-100'
                 }`}
               >
-                <Menu className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <Menu className="w-4 h-4 text-sky-600 dark:text-cyan-300 shrink-0" />
                 <span>
                   {activeTab === 'painel'
                     ? 'Painel'
@@ -2023,7 +2051,7 @@ export default function App() {
                     : 'Alertas'}
                 </span>
                 {counts.unread > 0 && (
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-md bg-sky-600 text-white leading-none">
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-md bg-gradient-to-r from-sky-600 to-cyan-600 text-white leading-none">
                     {counts.unread}
                   </span>
                 )}
@@ -2035,14 +2063,20 @@ export default function App() {
               </button>
 
               {navMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 sm:w-72 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl p-2 z-50 space-y-1">
-                  <div className="px-2.5 py-1.5 border-b border-slate-200/80 dark:border-white/[0.07] flex items-center justify-between">
+                <div className="absolute right-0 mt-2 w-64 sm:w-72 rounded-xl border border-slate-200 dark:border-sky-400/20 bg-gradient-to-b from-white to-slate-50 dark:from-[#0E182B] dark:to-[#091423] shadow-2xl p-2 z-50 space-y-1">
+                  <div className="px-2.5 py-1.5 border-b border-slate-200/80 dark:border-white/[0.08] flex items-center justify-between gap-2">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       Menu Principal
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
-                      6 seções
-                    </span>
+                    {state && (
+                      <span className="text-[11px] font-mono tabular-nums text-emerald-700 dark:text-emerald-300 font-semibold">
+                        USD R${' '}
+                        {state.usdBrlRate.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 4,
+                          maximumFractionDigits: 4,
+                        })}
+                      </span>
+                    )}
                   </div>
 
                   {(
@@ -2114,10 +2148,10 @@ export default function App() {
                           setActiveTab(item.id);
                           setNavMenuOpen(false);
                         }}
-                        className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                        className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
                           isActive
-                            ? 'bg-sky-600 text-white'
-                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.06]'
+                            ? 'bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-600 text-white shadow-sm shadow-sky-500/20'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100/90 dark:hover:bg-white/[0.06]'
                         }`}
                       >
                         <Icon
@@ -2245,7 +2279,7 @@ export default function App() {
         {/* Workspace Context Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 text-balance">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-sky-900 to-teal-800 dark:from-white dark:via-sky-200 dark:to-teal-200 bg-clip-text text-transparent text-balance">
               Inteligência Autônoma de Criptomoedas
             </h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
@@ -2267,15 +2301,15 @@ export default function App() {
 
           {state && (
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center gap-1 rounded-lg bg-white dark:bg-[#111827] p-1 border border-slate-300 dark:border-white/[0.08] shadow-xs dark:shadow-none">
+              <div className="flex items-center gap-1 rounded-lg bg-white/90 dark:bg-[#0E182B]/90 p-1 border border-slate-300/80 dark:border-sky-400/15 shadow-xs dark:shadow-none">
                 {(['BRL', 'USD'] as const).map((curr) => (
                   <button
                     key={curr}
                     type="button"
                     onClick={() => handleUpdateSettings({ currency: curr })}
-                    className={`px-2.5 py-1 text-xs font-mono font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                    className={`px-2.5 py-1 text-xs font-mono font-medium rounded-md transition-all whitespace-nowrap shrink-0 ${
                       state.settings.currency === curr
-                        ? 'bg-sky-600 text-white'
+                        ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
@@ -3661,38 +3695,11 @@ export default function App() {
       </main>
 
       {/* Quiet Footer */}
-      <footer className="border-t border-slate-200 dark:border-white/[0.06] py-5 px-4 sm:px-6">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600 dark:text-slate-500">
+      <footer className="border-t border-slate-200/80 dark:border-white/[0.06] py-5 px-4 sm:px-6">
+        <div className="max-w-[1440px] mx-auto text-xs text-slate-600 dark:text-slate-500">
           <span>
             RD Crypto — Análises geradas por inteligência artificial com dados de mercado em tempo real para fins informativos e educacionais. Não constitui recomendação financeira oficial.
           </span>
-          {state && (
-            <div
-              className="inline-flex items-center gap-2 font-mono tabular-nums text-slate-700 dark:text-slate-300"
-              title={`Cotação comercial USD/BRL atualizada automaticamente a cada 5s (última atualização: ${new Date(
-                lastUsdBrlUpdateAt
-              ).toLocaleTimeString('pt-BR')})`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>
-                  USD/BRL R${' '}
-                  {state.usdBrlRate.toLocaleString('pt-BR', {
-                    minimumFractionDigits: 4,
-                    maximumFractionDigits: 4,
-                  })}
-                </span>
-              </span>
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                ·{' '}
-                {new Date(lastUsdBrlUpdateAt).toLocaleTimeString('pt-BR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })}
-              </span>
-            </div>
-          )}
         </div>
       </footer>
 
