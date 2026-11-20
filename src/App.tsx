@@ -1,15 +1,20 @@
 import {
+  Activity,
   Bell,
   BrainCircuit,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Cloud,
   CloudCheck,
+  Coins,
   Copy,
   ExternalLink,
+  LayoutDashboard,
   Loader2,
   LogOut,
+  Menu,
   Moon,
   Plus,
   RefreshCw,
@@ -75,6 +80,7 @@ import {
   apiRunStudy,
   apiSyncServer24h,
   apiUpdateSettings,
+  apiUpdateTransaction,
   apiUpdateTrigger,
   computePortfolioSummaryFromData,
   evaluateCloudAlertsAndTriggers,
@@ -99,6 +105,7 @@ import {
   cloudSaveAlertsAndTriggerUpdates,
   cloudSaveStudyResults,
   cloudUpdateSettings,
+  cloudUpdateTransaction,
   cloudUpdateTrigger,
   ensureUserCloudProfile,
   sanitizeSettings,
@@ -212,11 +219,13 @@ export default function App() {
   const [cloudNextStudyAt, setCloudNextStudyAt] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<NavTab>(getInitialNavTab);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
   const [selectedCoinId, setSelectedCoinId] = useState<string>(getInitialSelectedCoinId);
   const [signalFilter, setSignalFilter] = useState<'TODOS' | SignalAction>('TODOS');
   const [tableSearch, setTableSearch] = useState('');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [txModalOpen, setTxModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<PortfolioTransaction | null>(null);
   const [txPreselectedCoinId, setTxPreselectedCoinId] = useState<string | null>(null);
   const [txPreselectedType, setTxPreselectedType] = useState<TransactionType>('compra');
   const [triggerModalOpen, setTriggerModalOpen] = useState(false);
@@ -243,6 +252,7 @@ export default function App() {
   const [pullDistance, setPullDistance] = useState(0);
 
   const cloudMenuRef = useRef<HTMLDivElement | null>(null);
+  const navMenuRef = useRef<HTMLDivElement | null>(null);
   const localStateRef = useRef<AppStatePayload | null>(null);
   const cloudDataRef = useRef<CloudWorkspaceData | null>(null);
   const cloudSnapshotsRef = useRef<Record<string, MarketSnapshot>>({});
@@ -330,6 +340,24 @@ export default function App() {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [cloudMenuOpen]);
+
+  useEffect(() => {
+    if (!navMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (navMenuRef.current && !navMenuRef.current.contains(event.target as Node)) {
+        setNavMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNavMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [navMenuOpen]);
 
   // Persist active tab, subtabs, and selected coin across browser reloads / pull-to-refresh
   useEffect(() => {
@@ -1320,6 +1348,63 @@ export default function App() {
     setLocalState(updatedState);
   }
 
+  async function handleUpdateTransaction(
+    txId: string,
+    payload: {
+      coinId: string;
+      symbol: string;
+      name: string;
+      type: TransactionType;
+      quantity: number;
+      pricePerCoinUsd: number;
+      feeUsd: number;
+      timestamp: string;
+      note?: string;
+    }
+  ) {
+    if (cloudUser && cloudDataRef.current) {
+      const workspace = cloudDataRef.current;
+      const upperSym = payload.symbol.toUpperCase();
+      const missingFromWatchlist = !workspace.watchlist.some((w) => w.id === payload.coinId);
+      const autoAsset: WatchlistAsset | null = missingFromWatchlist
+        ? {
+            id: payload.coinId,
+            symbol: upperSym,
+            name: payload.name,
+            binanceSymbol: `${upperSym}USDT`,
+            addedAt: new Date().toISOString(),
+          }
+        : null;
+      const updatedTx: PortfolioTransaction = {
+        id: txId,
+        coinId: payload.coinId,
+        symbol: upperSym,
+        name: payload.name,
+        type: payload.type,
+        quantity: payload.quantity,
+        pricePerCoinUsd: payload.pricePerCoinUsd,
+        feeUsd: payload.feeUsd,
+        timestamp: payload.timestamp,
+        note: payload.note,
+      };
+      await cloudUpdateTransaction(cloudUser.uid, updatedTx, autoAsset);
+
+      const assetsToFetch = autoAsset
+        ? [autoAsset, ...buildTrackedAssetList(workspace)]
+        : buildTrackedAssetList(workspace);
+      void apiFetchSnapshotsForAssets(assetsToFetch, true)
+        .then(({ snapshots, usdBrlRate }) => {
+          setCloudSnapshots((prev) => ({ ...prev, ...snapshots }));
+          setCloudUsdBrlRate(usdBrlRate);
+        })
+        .catch(() => {});
+      return;
+    }
+
+    const updatedState = await apiUpdateTransaction(txId, payload);
+    setLocalState(updatedState);
+  }
+
   async function handleDeleteTransaction(txId: string) {
     try {
       if (cloudUser) {
@@ -1467,8 +1552,16 @@ export default function App() {
   }
 
   function openTransactionModal(coinId?: string, txType: TransactionType = 'compra') {
+    setEditingTransaction(null);
     setTxPreselectedCoinId(coinId ?? null);
     setTxPreselectedType(txType);
+    setTxModalOpen(true);
+  }
+
+  function openEditTransactionModal(tx: PortfolioTransaction) {
+    setEditingTransaction(tx);
+    setTxPreselectedCoinId(tx.coinId);
+    setTxPreselectedType(tx.type);
     setTxModalOpen(true);
   }
 
@@ -1731,10 +1824,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-[#0B0F17] dark:text-slate-100 transition-colors">
-      {/* Top Bar Contract: 3 zones separated by gap-8 */}
+      {/* Clean Top Bar with Unified Corner Navigation Menu */}
       <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-white/[0.08] bg-white/95 dark:bg-[#0B0F17]/95 backdrop-blur-md">
-        <div className="max-w-[1440px] mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-8">
-          {/* Zone 1: Single-line brand wordmark */}
+        <div className="max-w-[1440px] mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Left: Brand wordmark */}
           <button
             type="button"
             onClick={() => setActiveTab('painel')}
@@ -1743,39 +1836,8 @@ export default function App() {
             SinalCripto IA
           </button>
 
-          {/* Zone 2: Concise single-line nav links */}
-          <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-sm font-medium">
-            {(
-              [
-                { id: 'painel', label: 'Painel' },
-                { id: 'monitor', label: 'Monitor' },
-                { id: 'carteira', label: 'Carteira' },
-                { id: 'ativos', label: 'Ativos' },
-                { id: 'autoestudo', label: 'Autoestudo' },
-                {
-                  id: 'alertas',
-                  label:
-                    counts.unread > 0 ? `Alertas (${counts.unread})` : 'Alertas',
-                },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveTab(item.id)}
-                className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                  activeTab === item.id
-                    ? 'text-slate-900 dark:text-slate-100 border-sky-600 dark:border-sky-500 font-semibold'
-                    : 'text-slate-600 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          {/* Zone 3: Tiny cloud sync icon + Theme toggle + PWA Install + 1 primary CTA button */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right Corner: Cloud sync + Theme toggle + PWA Install + Study CTA + Unified Corner Menu */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {authReady && (
               <div className="relative" ref={cloudMenuRef}>
                 <button
@@ -1877,7 +1939,7 @@ export default function App() {
                   : 'Executar estudo completo agora'
               }
               onClick={() => handleRunStudy()}
-              className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 dark:hover:bg-sky-500 text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-xs"
             >
               {state?.isStudying ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1893,39 +1955,173 @@ export default function App() {
                 </>
               )}
             </button>
+
+            {/* Unified Corner Navigation Menu (Painel, Monitor, Carteira, Ativos, Autoestudo, Alertas) */}
+            <div className="relative" ref={navMenuRef}>
+              <button
+                type="button"
+                onClick={() => setNavMenuOpen((prev) => !prev)}
+                aria-expanded={navMenuOpen}
+                aria-label="Abrir menu de navegação"
+                className={`relative inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
+                  navMenuOpen
+                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                    : 'border-slate-300 dark:border-white/10 bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
+                }`}
+              >
+                <Menu className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <span>
+                  {activeTab === 'painel'
+                    ? 'Painel'
+                    : activeTab === 'monitor'
+                    ? 'Monitor'
+                    : activeTab === 'carteira'
+                    ? 'Carteira'
+                    : activeTab === 'ativos'
+                    ? 'Ativos'
+                    : activeTab === 'autoestudo'
+                    ? 'Autoestudo'
+                    : 'Alertas'}
+                </span>
+                {counts.unread > 0 && (
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-md bg-sky-600 text-white leading-none">
+                    {counts.unread}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 transition-transform ${
+                    navMenuOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {navMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 sm:w-72 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl p-2 z-50 space-y-1">
+                  <div className="px-2.5 py-1.5 border-b border-slate-200/80 dark:border-white/[0.07] flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Menu Principal
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                      6 seções
+                    </span>
+                  </div>
+
+                  {(
+                    [
+                      {
+                        id: 'painel',
+                        label: 'Painel',
+                        desc: 'Resumo, sinais da IA e análise técnica',
+                        icon: LayoutDashboard,
+                        badge: null,
+                      },
+                      {
+                        id: 'monitor',
+                        label: 'Monitor',
+                        desc: 'Cotações ao vivo (grande, pequeno ou lista)',
+                        icon: Activity,
+                        badge: monitorAssets.length > 0 ? String(monitorAssets.length) : null,
+                      },
+                      {
+                        id: 'carteira',
+                        label: 'Carteira',
+                        desc: 'Patrimônio, ativos e histórico editável',
+                        icon: Wallet,
+                        badge:
+                          (state?.portfolio.transactions.length ?? 0) > 0
+                            ? `${state?.portfolio.holdings.length ?? 0} ativos · ${
+                                state?.portfolio.transactions.length ?? 0
+                              } hist.`
+                            : null,
+                      },
+                      {
+                        id: 'ativos',
+                        label: 'Ativos',
+                        desc: 'Lista completa de criptos monitoradas',
+                        icon: Coins,
+                        badge:
+                          (state?.watchlist.length ?? 0) > 0
+                            ? String(state?.watchlist.length)
+                            : null,
+                      },
+                      {
+                        id: 'autoestudo',
+                        label: 'Autoestudo',
+                        desc: 'Ciclos autônomos e memória da IA',
+                        icon: BrainCircuit,
+                        badge: null,
+                      },
+                      {
+                        id: 'alertas',
+                        label: 'Alertas & Robô 24/7',
+                        desc: 'Gatilhos, Telegram, WhatsApp e Script Python',
+                        icon: Bell,
+                        badge:
+                          counts.unread > 0
+                            ? `${counts.unread} novo(s)`
+                            : (state?.triggers?.length ?? 0) > 0
+                            ? `${state?.triggers?.length} gat.`
+                            : null,
+                      },
+                    ] as const
+                  ).map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setNavMenuOpen(false);
+                        }}
+                        className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                          isActive
+                            ? 'bg-sky-600 text-white'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <Icon
+                          className={`w-4 h-4 mt-0.5 shrink-0 ${
+                            isActive ? 'text-white' : 'text-sky-600 dark:text-sky-400'
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold truncate">
+                              {item.label}
+                            </span>
+                            {item.badge && (
+                              <span
+                                className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${
+                                  isActive
+                                    ? 'bg-white/20 text-white'
+                                    : 'bg-slate-100 dark:bg-[#0B0F17] text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-white/10'
+                                }`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p
+                            className={`text-[11px] truncate mt-0.5 ${
+                              isActive
+                                ? 'text-sky-100'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                          >
+                            {item.desc}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
-
-      {/* Mobile secondary nav */}
-      <div className="md:hidden border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0F1520] px-3 sm:px-4 py-2 flex items-center gap-3.5 overflow-x-auto text-xs font-medium">
-        {(
-          [
-            { id: 'painel', label: 'Painel' },
-            { id: 'monitor', label: 'Monitor' },
-            { id: 'carteira', label: 'Carteira' },
-            { id: 'ativos', label: 'Ativos' },
-            { id: 'autoestudo', label: 'Autoestudo' },
-            {
-              id: 'alertas',
-              label: counts.unread > 0 ? `Alertas (${counts.unread})` : 'Alertas',
-            },
-          ] as const
-        ).map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setActiveTab(item.id)}
-            className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 ${
-              activeTab === item.id
-                ? 'text-slate-900 dark:text-slate-100 border-sky-600 dark:border-sky-500 font-semibold'
-                : 'text-slate-600 dark:text-slate-400 border-transparent'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
 
       {/* Pull-to-refresh feedback strip (keeps active page intact while refreshing quotes) */}
       {(pullDistance > 0 || manualRefreshing) && (
@@ -2751,6 +2947,7 @@ export default function App() {
                 currency={state.settings.currency}
                 usdBrlRate={state.usdBrlRate}
                 onOpenAddTransaction={(coinId) => openTransactionModal(coinId)}
+                onEditTransaction={(tx) => openEditTransactionModal(tx)}
                 onDeleteTransaction={handleDeleteTransaction}
                 onDeleteCoinHistory={handleDeletePortfolioCoin}
                 onClearTransactions={handleClearPortfolioTransactions}
@@ -3454,8 +3651,13 @@ export default function App() {
           usdBrlRate={state.usdBrlRate}
           preselectedCoinId={txPreselectedCoinId}
           preselectedType={txPreselectedType}
-          onClose={() => setTxModalOpen(false)}
+          editingTransaction={editingTransaction}
+          onClose={() => {
+            setTxModalOpen(false);
+            setEditingTransaction(null);
+          }}
           onSubmit={handleAddTransaction}
+          onUpdate={handleUpdateTransaction}
         />
       )}
 

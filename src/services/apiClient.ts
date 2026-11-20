@@ -2435,6 +2435,74 @@ export async function apiAddTransaction(payload: {
   );
 }
 
+export async function apiUpdateTransaction(
+  txId: string,
+  payload: {
+    coinId: string;
+    symbol: string;
+    name: string;
+    type: TransactionType;
+    quantity: number;
+    pricePerCoinUsd: number;
+    feeUsd: number;
+    timestamp: string;
+    note?: string;
+  }
+): Promise<AppStatePayload> {
+  return withFallback(
+    async () => {
+      const res = await safeFetchJson<{ state: AppStatePayload }>(
+        `/api/portfolio/transactions/${encodeURIComponent(txId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      return res.state;
+    },
+    async () => {
+      const store = loadLocalStore();
+      const idx = store.transactions.findIndex((t) => t.id === txId);
+      if (idx === -1) {
+        throw new Error('Transação não encontrada.');
+      }
+      const upperSym = payload.symbol.toUpperCase();
+      let addedNewAsset: WatchlistAsset | null = null;
+      if (!store.watchlist.some((w) => w.id === payload.coinId)) {
+        addedNewAsset = {
+          id: payload.coinId,
+          symbol: upperSym,
+          name: payload.name,
+          binanceSymbol: `${upperSym}USDT`,
+          addedAt: new Date().toISOString(),
+        };
+        store.watchlist.push(addedNewAsset);
+      }
+
+      store.transactions[idx] = {
+        ...store.transactions[idx],
+        coinId: payload.coinId,
+        symbol: upperSym,
+        name: payload.name,
+        type: payload.type,
+        quantity: payload.quantity,
+        pricePerCoinUsd: payload.type === 'ganho' ? 0 : payload.pricePerCoinUsd,
+        feeUsd: Math.max(0, payload.feeUsd || 0),
+        timestamp: payload.timestamp,
+        note: payload.note?.trim() || undefined,
+      };
+      saveLocalStore(store);
+
+      const snapshots = await fetchLocalMarketSnapshots(getLocalTrackedAssets(store), true);
+      if (addedNewAsset) {
+        runLocalStudy([addedNewAsset], 'novo_ativo', snapshots);
+      }
+      return buildLocalStatePayload(false);
+    }
+  );
+}
+
 export async function apiDeleteTransaction(txId: string): Promise<AppStatePayload> {
   return withFallback(
     async () => {

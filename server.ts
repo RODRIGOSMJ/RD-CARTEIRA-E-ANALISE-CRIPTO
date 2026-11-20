@@ -705,6 +705,98 @@ async function startServer() {
     }
   });
 
+  app.patch('/api/portfolio/transactions/:txId', async (req, res) => {
+    try {
+      const { txId } = req.params;
+      const { coinId, symbol, name, type, quantity, pricePerCoinUsd, feeUsd, timestamp, note } =
+        req.body as {
+          coinId?: string;
+          symbol?: string;
+          name?: string;
+          type?: 'compra' | 'venda' | 'ganho';
+          quantity?: number;
+          pricePerCoinUsd?: number;
+          feeUsd?: number;
+          timestamp?: string;
+          note?: string;
+        };
+
+      const store = getStore();
+      const idx = store.transactions.findIndex((t) => t.id === txId);
+      if (idx === -1) {
+        return res.status(404).json({ error: 'Transação não encontrada.' });
+      }
+
+      const existingTx = store.transactions[idx];
+      const nextCoinId = coinId?.trim() || existingTx.coinId;
+      const nextSymbol = (symbol?.trim() || existingTx.symbol).toUpperCase();
+      const nextName = name?.trim() || existingTx.name;
+      const nextType =
+        type === 'compra' || type === 'venda' || type === 'ganho' ? type : existingTx.type;
+      const nextQty = quantity !== undefined ? Number(quantity) : existingTx.quantity;
+      if (!Number.isFinite(nextQty) || nextQty <= 0) {
+        return res.status(400).json({ error: 'Informe uma quantidade maior que zero.' });
+      }
+
+      const rawPrice =
+        pricePerCoinUsd !== undefined ? Number(pricePerCoinUsd) : existingTx.pricePerCoinUsd;
+      const nextUnitPrice = nextType === 'ganho' ? 0 : rawPrice;
+      if (nextType !== 'ganho' && (!Number.isFinite(nextUnitPrice) || nextUnitPrice <= 0)) {
+        return res.status(400).json({ error: 'Informe um preço unitário válido.' });
+      }
+
+      const nextFee =
+        feeUsd !== undefined ? Math.max(0, Number(feeUsd) || 0) : existingTx.feeUsd;
+      const nextTimestamp = timestamp
+        ? new Date(timestamp).toISOString()
+        : existingTx.timestamp;
+      const nextNote =
+        note !== undefined
+          ? note.trim()
+            ? String(note).trim().slice(0, 140)
+            : undefined
+          : existingTx.note;
+
+      let addedNewAsset: WatchlistAsset | null = null;
+      if (!store.watchlist.some((a) => a.id === nextCoinId)) {
+        addedNewAsset = {
+          id: nextCoinId,
+          symbol: nextSymbol,
+          name: nextName,
+          binanceSymbol: `${nextSymbol}USDT`,
+          addedAt: new Date().toISOString(),
+        };
+        store.watchlist.push(addedNewAsset);
+      }
+
+      const updatedTx = {
+        ...existingTx,
+        coinId: nextCoinId,
+        symbol: nextSymbol,
+        name: nextName,
+        type: nextType,
+        quantity: nextQty,
+        pricePerCoinUsd: Number.isFinite(nextUnitPrice) ? nextUnitPrice : 0,
+        feeUsd: nextFee,
+        timestamp: nextTimestamp,
+        note: nextNote,
+      };
+
+      store.transactions[idx] = updatedTx;
+      saveStore();
+
+      await fetchMarketSnapshots(store.watchlist, true);
+      const fullState = await buildStatePayload(false);
+      res.json({ transaction: updatedTx, state: fullState });
+
+      if (addedNewAsset && !isStudying && process.env.GEMINI_API_KEY) {
+        void executeStudy([addedNewAsset], 'novo_ativo').catch(() => {});
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Erro ao editar transação.' });
+    }
+  });
+
   app.delete('/api/portfolio/transactions/:txId', async (req, res) => {
     try {
       const { txId } = req.params;

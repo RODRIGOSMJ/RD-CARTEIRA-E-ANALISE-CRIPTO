@@ -1,7 +1,12 @@
-import { Loader2, Plus, Search, X } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { apiGetCoinPrice, apiSearchCryptos } from '../services/apiClient.ts';
-import type { MarketSnapshot, TransactionType, WatchlistAsset } from '../types/crypto.ts';
+import type {
+  MarketSnapshot,
+  PortfolioTransaction,
+  TransactionType,
+  WatchlistAsset,
+} from '../types/crypto.ts';
 import { formatPrice } from '../utils/format.ts';
 import { CryptoLogo } from './CryptoLogo.tsx';
 
@@ -20,6 +25,7 @@ interface AddTransactionModalProps {
   usdBrlRate: number;
   preselectedCoinId?: string | null;
   preselectedType?: TransactionType;
+  editingTransaction?: PortfolioTransaction | null;
   onClose: () => void;
   onSubmit: (payload: {
     coinId: string;
@@ -32,12 +38,34 @@ interface AddTransactionModalProps {
     timestamp: string;
     note?: string;
   }) => Promise<void>;
+  onUpdate?: (
+    txId: string,
+    payload: {
+      coinId: string;
+      symbol: string;
+      name: string;
+      type: TransactionType;
+      quantity: number;
+      pricePerCoinUsd: number;
+      feeUsd: number;
+      timestamp: string;
+      note?: string;
+    }
+  ) => Promise<void>;
 }
 
-function getLocalDatetimeInputValue(): string {
-  const d = new Date();
+function getLocalDatetimeInputValue(isoString?: string): string {
+  const parsed = isoString ? new Date(isoString) : new Date();
+  const d = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   const offsetMs = d.getTimezoneOffset() * 60_000;
   return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function formatEditableNumber(val: number): string {
+  if (!Number.isFinite(val) || val <= 0) return '0';
+  if (val < 0.001) return Number(val.toPrecision(6)).toString();
+  if (val < 1) return Number(val.toFixed(6)).toString();
+  return Number(val.toFixed(4)).toString();
 }
 
 export function AddTransactionModal({
@@ -48,8 +76,10 @@ export function AddTransactionModal({
   usdBrlRate,
   preselectedCoinId,
   preselectedType = 'compra',
+  editingTransaction = null,
   onClose,
   onSubmit,
+  onUpdate,
 }: AddTransactionModalProps) {
   const [txType, setTxType] = useState<TransactionType>(preselectedType);
   const [selectedCoin, setSelectedCoin] = useState<{
@@ -65,35 +95,69 @@ export function AddTransactionModal({
   const [priceInput, setPriceInput] = useState('');
   const [liveFetchedPriceUsd, setLiveFetchedPriceUsd] = useState<number | null>(null);
   const [feeInput, setFeeInput] = useState('0');
-  const [timestamp, setTimestamp] = useState(getLocalDatetimeInputValue);
+  const [timestamp, setTimestamp] = useState(() => getLocalDatetimeInputValue());
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wasOpenRef = useRef(false);
+  const prevEditIdRef = useRef<string | null>(null);
   const userEditedPriceRef = useRef(false);
+  const userEditedFeeRef = useRef(false);
 
-  // Initialize ONLY when modal transitions from closed -> open (never on live market_tick updates!)
+  // Initialize ONLY when modal opens or switches target editing transaction
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false;
+      prevEditIdRef.current = null;
       return;
     }
-    if (wasOpenRef.current) {
+    const currentEditId = editingTransaction?.id ?? null;
+    if (wasOpenRef.current && prevEditIdRef.current === currentEditId) {
       return;
     }
     wasOpenRef.current = true;
+    prevEditIdRef.current = currentEditId;
     userEditedPriceRef.current = false;
+    userEditedFeeRef.current = false;
+
+    setError(null);
+    setCoinSearch('');
+    setSearchResults([]);
+    setLiveFetchedPriceUsd(null);
+
+    if (editingTransaction) {
+      setTxType(editingTransaction.type);
+      setSelectedCoin({
+        id: editingTransaction.coinId,
+        symbol: editingTransaction.symbol,
+        name: editingTransaction.name,
+      });
+      setQuantity(String(editingTransaction.quantity));
+      if (editingTransaction.type === 'ganho') {
+        setPriceInput('0');
+      } else {
+        const displayPrice =
+          currency === 'BRL'
+            ? editingTransaction.pricePerCoinUsd * usdBrlRate
+            : editingTransaction.pricePerCoinUsd;
+        setPriceInput(formatEditableNumber(displayPrice));
+      }
+      const displayFee =
+        currency === 'BRL'
+          ? (editingTransaction.feeUsd || 0) * usdBrlRate
+          : editingTransaction.feeUsd || 0;
+      setFeeInput(displayFee > 0 ? formatEditableNumber(displayFee) : '0');
+      setTimestamp(getLocalDatetimeInputValue(editingTransaction.timestamp));
+      setNote(editingTransaction.note ?? '');
+      return;
+    }
 
     setTxType(preselectedType);
-    setError(null);
     setQuantity('');
     setFeeInput('0');
     setNote('');
     setTimestamp(getLocalDatetimeInputValue());
-    setCoinSearch('');
-    setSearchResults([]);
-    setLiveFetchedPriceUsd(null);
 
     const target =
       (preselectedCoinId && watchlist.find((w) => w.id === preselectedCoinId)) ||
@@ -114,7 +178,16 @@ export function AddTransactionModal({
       setSelectedCoin(null);
       setPriceInput('');
     }
-  }, [open, preselectedCoinId, preselectedType, watchlist, snapshots, currency, usdBrlRate]);
+  }, [
+    open,
+    editingTransaction,
+    preselectedCoinId,
+    preselectedType,
+    watchlist,
+    snapshots,
+    currency,
+    usdBrlRate,
+  ]);
 
   useEffect(() => {
     const q = coinSearch.trim();
@@ -138,12 +211,14 @@ export function AddTransactionModal({
 
   if (!open) return null;
 
+  const isEditing = Boolean(editingTransaction);
+
   const selectAsset = async (coin: { id: string; symbol: string; name: string }) => {
     setSelectedCoin(coin);
     setCoinSearch('');
     setSearchResults([]);
     setLiveFetchedPriceUsd(null);
-    userEditedPriceRef.current = false;
+    userEditedPriceRef.current = true;
 
     const snap = snapshots[coin.id];
     if (snap && snap.priceUsd > 0) {
@@ -160,7 +235,7 @@ export function AddTransactionModal({
       const priceUsd = await apiGetCoinPrice(coin.id, coin.symbol);
       if (priceUsd && priceUsd > 0) {
         setLiveFetchedPriceUsd(priceUsd);
-        if (!userEditedPriceRef.current && txType !== 'ganho') {
+        if (txType !== 'ganho') {
           const displayPrice =
             currency === 'BRL' ? priceUsd * usdBrlRate : priceUsd;
           setPriceInput(displayPrice.toFixed(displayPrice < 1 ? 4 : 2));
@@ -176,7 +251,7 @@ export function AddTransactionModal({
 
   const applyLivePrice = () => {
     if (!effectiveLiveUsd) return;
-    userEditedPriceRef.current = false;
+    userEditedPriceRef.current = true;
     const displayPrice =
       currency === 'BRL' ? effectiveLiveUsd * usdBrlRate : effectiveLiveUsd;
     setPriceInput(displayPrice.toFixed(displayPrice < 1 ? 4 : 2));
@@ -210,20 +285,42 @@ export function AddTransactionModal({
       return;
     }
 
+    const finalPriceUsd =
+      txType === 'ganho'
+        ? 0
+        : isEditing &&
+          editingTransaction &&
+          !userEditedPriceRef.current &&
+          selectedCoin.id === editingTransaction.coinId &&
+          editingTransaction.pricePerCoinUsd > 0
+        ? editingTransaction.pricePerCoinUsd
+        : toUsd(priceNum);
+
+    const finalFeeUsd =
+      isEditing && editingTransaction && !userEditedFeeRef.current
+        ? Math.max(0, editingTransaction.feeUsd || 0)
+        : toUsd(Math.max(0, feeNum));
+
+    const payload = {
+      coinId: selectedCoin.id,
+      symbol: selectedCoin.symbol,
+      name: selectedCoin.name,
+      type: txType,
+      quantity: qtyNum,
+      pricePerCoinUsd: finalPriceUsd,
+      feeUsd: finalFeeUsd,
+      timestamp: new Date(timestamp).toISOString(),
+      note: note.trim() || undefined,
+    };
+
     setError(null);
     setSubmitting(true);
     try {
-      await onSubmit({
-        coinId: selectedCoin.id,
-        symbol: selectedCoin.symbol,
-        name: selectedCoin.name,
-        type: txType,
-        quantity: qtyNum,
-        pricePerCoinUsd: txType === 'ganho' ? 0 : toUsd(priceNum),
-        feeUsd: toUsd(Math.max(0, feeNum)),
-        timestamp: new Date(timestamp).toISOString(),
-        note: note.trim() || undefined,
-      });
+      if (isEditing && editingTransaction && onUpdate) {
+        await onUpdate(editingTransaction.id, payload);
+      } else {
+        await onSubmit(payload);
+      }
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Erro ao salvar transação.');
@@ -239,14 +336,22 @@ export function AddTransactionModal({
       aria-modal="true"
       aria-labelledby="add-tx-title"
     >
-      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/[0.08]">
           <div>
-            <h2 id="add-tx-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Adicionar transação na carteira
+            <h2
+              id="add-tx-title"
+              className="text-base font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2"
+            >
+              {isEditing && <Pencil className="w-4 h-4 text-sky-600 dark:text-sky-400" />}
+              {isEditing
+                ? `Editar transação (${editingTransaction?.symbol})`
+                : 'Adicionar transação na carteira'}
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              Os dados da carteira são integrados automaticamente aos sinais da IA.
+              {isEditing
+                ? 'Ajuste quantidade, preço, tipo, data ou observação. O preço médio será recalculado na hora.'
+                : 'Os dados da carteira são integrados automaticamente aos sinais da IA.'}
             </p>
           </div>
           <button
@@ -458,7 +563,10 @@ export function AddTransactionModal({
                   step="any"
                   min="0"
                   value={feeInput}
-                  onChange={(e) => setFeeInput(e.target.value)}
+                  onChange={(e) => {
+                    userEditedFeeRef.current = true;
+                    setFeeInput(e.target.value);
+                  }}
                   placeholder="0.00"
                   className="w-full px-3 py-2 text-xs font-mono tabular-nums rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 />
@@ -538,7 +646,9 @@ export function AddTransactionModal({
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:opacity-50"
             >
               {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {txType === 'compra'
+              {isEditing
+                ? 'Salvar alterações'
+                : txType === 'compra'
                 ? 'Registrar compra'
                 : txType === 'venda'
                 ? 'Registrar venda'

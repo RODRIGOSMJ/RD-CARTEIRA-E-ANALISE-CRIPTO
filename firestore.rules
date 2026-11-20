@@ -480,6 +480,23 @@ service cloud.firestore {
           && isValidPortfolioTransaction(incoming(), userId, txId)
           && exists(/databases/$(database)/documents/users/$(userId))
           && incoming().createdAt == request.time;
+        allow update: if isValidId(userId) && isValidId(txId)
+          && isVerifiedOwner(userId)
+          && isValidPortfolioTransaction(incoming(), userId, txId)
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'coinId',
+            'symbol',
+            'name',
+            'type',
+            'quantity',
+            'pricePerCoinUsd',
+            'feeUsd',
+            'timestamp',
+            'note'
+          ])
+          && incoming().ownerId == existing().ownerId
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt;
         allow delete: if isValidId(userId) && isValidId(txId) && isVerifiedOwner(userId);
       }
 

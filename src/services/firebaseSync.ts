@@ -819,6 +819,44 @@ export async function cloudAddTransaction(
   }
 }
 
+export async function cloudUpdateTransaction(
+  uid: string,
+  tx: PortfolioTransaction,
+  autoWatchlistAsset?: WatchlistAsset | null
+): Promise<void> {
+  const safeId = toSafeDocId(tx.id);
+  const path = `users/${uid}/transactions/${safeId}`;
+  const type =
+    tx.type === 'compra' || tx.type === 'venda' || tx.type === 'ganho'
+      ? tx.type
+      : 'compra';
+  const batch = writeBatch(db);
+  if (autoWatchlistAsset) {
+    const assetDocId = toSafeDocId(autoWatchlistAsset.id);
+    batch.set(
+      doc(db, 'users', uid, 'watchlist', assetDocId),
+      buildWatchlistPayload(uid, autoWatchlistAsset)
+    );
+  }
+  const updateBody: Record<string, unknown> = {
+    coinId: clampNonEmptyStr(tx.coinId, 'crypto', 128),
+    symbol: clampNonEmptyStr(tx.symbol?.toUpperCase(), 'CRYPTO', 24),
+    name: clampNonEmptyStr(tx.name, tx.symbol || 'Crypto', 100),
+    type,
+    quantity: Math.max(1e-9, Number(tx.quantity) || 1e-9),
+    pricePerCoinUsd: type === 'ganho' ? 0 : Math.max(0, Number(tx.pricePerCoinUsd) || 0),
+    feeUsd: Math.max(0, Number(tx.feeUsd) || 0),
+    timestamp: clampNonEmptyStr(tx.timestamp, new Date().toISOString(), 48),
+    note: tx.note && tx.note.trim() ? clampStr(tx.note.trim(), 200) : deleteField(),
+  };
+  batch.update(doc(db, 'users', uid, 'transactions', safeId), updateBody);
+  try {
+    await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+}
+
 export async function cloudDeleteTransaction(uid: string, txId: string): Promise<void> {
   const docId = toSafeDocId(txId);
   const path = `users/${uid}/transactions/${docId}`;
