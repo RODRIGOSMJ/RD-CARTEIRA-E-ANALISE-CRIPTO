@@ -729,7 +729,7 @@ export function PortfolioView({
 
             <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-xs dark:shadow-none p-5 grid grid-cols-2 gap-4">
               <div className="min-w-0">
-                <span className="block text-xs text-slate-600 dark:text-slate-400">Melhor ativo</span>
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Melhor desempenho</span>
                 {portfolio.bestPerformer ? (
                   <div className="mt-2 space-y-0.5">
                     <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-900 dark:text-slate-100 truncate">
@@ -764,7 +764,7 @@ export function PortfolioView({
               </div>
 
               <div className="min-w-0 border-l border-slate-200 dark:border-white/[0.07] pl-4">
-                <span className="block text-xs text-slate-600 dark:text-slate-400">Pior ativo</span>
+                <span className="block text-xs text-slate-600 dark:text-slate-400">Pior desempenho</span>
                 {portfolio.worstPerformer ? (
                   <div className="mt-2 space-y-0.5">
                     <div className="flex items-center gap-2 font-mono font-bold text-base text-slate-900 dark:text-slate-100 truncate">
